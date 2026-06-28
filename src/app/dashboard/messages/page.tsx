@@ -1,23 +1,17 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
-import {
-  collection, addDoc, onSnapshot, serverTimestamp,
-  getDocs, where, query,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "@/lib/store";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import { Send, Users, User, Plus, ArrowLeft, Search } from "lucide-react";
+import toast from "react-hot-toast";
 
 type Member = { id: string; displayName: string; email: string; role: string };
 type Message = {
   id: string; senderId: string; senderName: string;
-  content: string; createdAt: any;
-  type: "direct" | "group";
-  conversationId?: string;
+  content: string; createdAt: number | null;
+  type: "direct" | "group"; conversationId?: string;
 };
 
-// Stable conversation ID between two users — same regardless of who opens chat
 function getConversationId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("__");
 }
@@ -33,70 +27,75 @@ export default function MessagesPage() {
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
   const [showNewChat, setShowNewChat] = useState(false);
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load members list
+  // Load members via Admin SDK API (bypasses Firestore rules)
   useEffect(() => {
     if (!user) return;
-    getDocs(collection(db, "members")).then((snap) => {
-      setMembers(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as Member))
-          .filter((m) => m.role !== "pending" && m.role !== "rejected" && m.id !== user.uid)
-      );
-    }).catch(console.error);
+    fetch("/api/get-members")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setMembers(data.filter((m: Member) => m.id !== user.uid));
+        }
+      })
+      .catch(console.error);
   }, [user]);
 
-  // Real-time messages for the active chat
-  useEffect(() => {
+  // Poll messages every 3 seconds (bypasses Firestore rules)
+  const fetchMessages = useCallback(async () => {
     if (!activeChat || !user) return;
-    setMessages([]);
-
-    let q;
-    if (activeChat.type === "group") {
-      q = query(collection(db, "messages"), where("type", "==", "group"));
-    } else {
-      // Query by conversationId — simple single-field index, always works
-      q = query(
-        collection(db, "messages"),
-        where("conversationId", "==", activeChat.convId)
-      );
-    }
-
-    const unsub = onSnapshot(q, (snap) => {
-      const msgs = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Message))
-        .sort((a, b) => {
-          const at = a.createdAt?.toMillis?.() ?? 0;
-          const bt = b.createdAt?.toMillis?.() ?? 0;
-          return at - bt;
-        });
-      setMessages(msgs);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    }, console.error);
-
-    return () => unsub();
+    const url = activeChat.type === "group"
+      ? "/api/messages?type=group"
+      : `/api/messages?conversationId=${activeChat.convId}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMessages(data);
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      }
+    } catch (e) { console.error(e); }
   }, [activeChat, user]);
 
+  useEffect(() => {
+    if (!activeChat) return;
+    fetchMessages();
+    pollRef.current = setInterval(fetchMessages, 3000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeChat, fetchMessages]);
+
   const send = async () => {
-    if (!text.trim() || !user || !activeChat) return;
-    const payload: any = {
-      senderId: user.uid,
-      senderName: user.displayName,
-      content: text.trim(),
-      createdAt: serverTimestamp(),
-      type: activeChat.type,
-    };
-    if (activeChat.type === "direct") {
-      payload.conversationId = activeChat.convId;
-      payload.recipientId = activeChat.peerId;
+    if (!text.trim() || !user || !activeChat || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senderId: user.uid,
+          senderName: user.displayName,
+          content: text.trim(),
+          type: activeChat.type,
+          conversationId: activeChat.convId,
+          recipientId: activeChat.peerId,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to send");
+      setText("");
+      fetchMessages();
+    } catch {
+      toast.error("Failed to send message.");
+    } finally {
+      setSending(false);
     }
-    await addDoc(collection(db, "messages"), payload);
-    setText("");
   };
 
   const openDirect = (member: Member) => {
     if (!user) return;
+    setMessages([]);
     setActiveChat({
       type: "direct",
       peerId: member.id,
@@ -109,6 +108,7 @@ export default function MessagesPage() {
   };
 
   const openGroup = () => {
+    setMessages([]);
     setActiveChat({ type: "group", peerName: "Everyone" });
     setView("chat");
     setShowNewChat(false);
@@ -118,9 +118,10 @@ export default function MessagesPage() {
     m.displayName?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const formatTime = (ts: any) => {
-    if (!ts?.toDate) return "";
-    return ts.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const formatTime = (ts: number | null) => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   // ── Chat View ──────────────────────────────────────────────────────────────
@@ -128,7 +129,7 @@ export default function MessagesPage() {
     return (
       <div className="flex flex-col h-[calc(100vh-8rem)] max-w-2xl mx-auto">
         <div className="flex items-center gap-3 pb-4 border-b border-gray-200 mb-2">
-          <button onClick={() => { setView("inbox"); setMessages([]); }}
+          <button onClick={() => { setView("inbox"); setMessages([]); if (pollRef.current) clearInterval(pollRef.current); }}
             className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft size={18} className="text-gray-600" />
           </button>
@@ -154,16 +155,12 @@ export default function MessagesPage() {
             return (
               <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[78%] flex flex-col ${isMine ? "items-end" : "items-start"}`}>
-                  {!isMine && (
-                    <p className="text-xs text-gray-400 mb-1 px-1">{m.senderName}</p>
-                  )}
+                  {!isMine && <p className="text-xs text-gray-400 mb-1 px-1">{m.senderName}</p>}
                   <div className={`px-4 py-2.5 rounded-2xl text-sm break-words ${
                     isMine
                       ? "bg-[#3b1f6e] text-white rounded-br-sm"
                       : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm"
-                  }`}>
-                    {m.content}
-                  </div>
+                  }`}>{m.content}</div>
                   <p className="text-xs text-gray-400 mt-1 px-1">{formatTime(m.createdAt)}</p>
                 </div>
               </div>
@@ -173,14 +170,11 @@ export default function MessagesPage() {
         </div>
 
         <div className="flex gap-2 pt-3 border-t border-gray-200 mt-2">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
+          <input value={text} onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder="Type a message..."
-            className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white"
-          />
-          <button onClick={send} disabled={!text.trim()}
+            className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white" />
+          <button onClick={send} disabled={!text.trim() || sending}
             className="bg-[#3b1f6e] text-white px-4 py-2.5 rounded-xl disabled:opacity-40 hover:bg-[#2a1550] transition-colors">
             <Send size={16} />
           </button>
@@ -232,7 +226,7 @@ export default function MessagesPage() {
         </div>
         <div className="divide-y divide-gray-50">
           {members.length === 0 && (
-            <p className="text-center py-8 text-gray-400 text-sm">No other members yet</p>
+            <p className="text-center py-8 text-gray-400 text-sm">Loading members...</p>
           )}
           {members.map((m) => (
             <button key={m.id} onClick={() => openDirect(m)}

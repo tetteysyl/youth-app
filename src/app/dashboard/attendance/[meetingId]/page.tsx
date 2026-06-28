@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, getDocs, collection, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
@@ -27,11 +27,10 @@ export default function AttendancePage() {
       const meetSnap = await getDoc(doc(db, "meetings", meetingId));
       if (meetSnap.exists()) setMeeting({ id: meetSnap.id, ...meetSnap.data() });
 
-      const membersSnap = await getDocs(collection(db, "members"));
-      const list = membersSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as any))
-        .filter((m) => m.role !== "pending" && m.role !== "rejected");
-      setMembers(list);
+      // Fetch via Admin SDK API to bypass Firestore rules
+      const membersRes = await fetch("/api/get-members");
+      const list = await membersRes.json();
+      setMembers(Array.isArray(list) ? list : []);
 
       // Pre-populate from saved attendees
       const saved = meetSnap.data()?.attendees || [];
