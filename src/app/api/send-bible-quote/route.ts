@@ -21,8 +21,30 @@ export async function POST(req: NextRequest) {
       ? `"${quote}"\n\n— ${reference}\n\nShared by ${senderName}`
       : `${quote}\n\nShared by ${senderName}`;
 
-    await sendBroadcastEmail(recipients, subject, message, senderName);
-    return NextResponse.json({ sent: recipients.length });
+    // Send emails
+    let emailError = null;
+    try {
+      await sendBroadcastEmail(recipients, subject, message, senderName);
+    } catch (e: any) {
+      emailError = e.message;
+    }
+
+    // In-app notifications
+    const now = new Date();
+    await Promise.all(
+      recipientIds.map((uid: string) =>
+        adminDb.collection("notifications").add({
+          userId: uid,
+          title: reference ? `📖 ${reference}` : "Daily Devotional",
+          body: quote.length > 100 ? quote.slice(0, 100) + "…" : quote,
+          type: "evangelism",
+          read: false,
+          createdAt: now,
+        })
+      )
+    );
+
+    return NextResponse.json({ sent: recipients.length, emailError });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -5,7 +5,6 @@ import { sendBroadcastEmail } from "@/lib/email";
 export async function POST(req: NextRequest) {
   try {
     const { meetingTitle, presentIds } = await req.json();
-
     if (!presentIds?.length) return NextResponse.json({ sent: 0 });
 
     const recipients: { email: string; name: string }[] = [];
@@ -18,14 +17,35 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    await sendBroadcastEmail(
-      recipients,
-      `Attendance Confirmed: ${meetingTitle}`,
-      `Dear Member,\n\nThis is to confirm that your attendance at the following meeting has been recorded:\n\n📋 ${meetingTitle}\n\nThank you for being present. God bless you!\n\nYours in Service,\nYPG Secretariat`,
-      "YPG Secretariat"
+    // Send emails
+    let emailError = null;
+    try {
+      await sendBroadcastEmail(
+        recipients,
+        `Attendance Confirmed: ${meetingTitle}`,
+        `Dear Member,\n\nYour attendance at "${meetingTitle}" has been recorded. Thank you for being present!\n\nYours in Service,\nYPG Secretariat`,
+        "YPG Secretariat"
+      );
+    } catch (e: any) {
+      emailError = e.message;
+    }
+
+    // Write in-app notifications
+    const now = new Date();
+    await Promise.all(
+      presentIds.map((uid: string) =>
+        adminDb.collection("notifications").add({
+          userId: uid,
+          title: "Attendance Recorded",
+          body: `Your attendance at "${meetingTitle}" has been marked. Thank you!`,
+          type: "attendance",
+          read: false,
+          createdAt: now,
+        })
+      )
     );
 
-    return NextResponse.json({ sent: recipients.length });
+    return NextResponse.json({ sent: recipients.length, emailError });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

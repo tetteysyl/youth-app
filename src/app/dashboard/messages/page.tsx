@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import {
-  collection, addDoc, query, orderBy, onSnapshot,
-  serverTimestamp, getDocs, where, or, and,
+  collection, addDoc, onSnapshot, serverTimestamp,
+  getDocs, where, query,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuthStore } from "@/lib/store";
@@ -13,7 +13,8 @@ type Member = { id: string; displayName: string; email: string; role: string };
 type Message = {
   id: string; senderId: string; senderName: string;
   content: string; createdAt: any;
-  type: "direct" | "group"; recipientId?: string; groupName?: string;
+  type: "direct" | "group"; recipientId?: string;
+  participants?: string[];
 };
 
 export default function MessagesPage() {
@@ -27,45 +28,59 @@ export default function MessagesPage() {
   const [showNewChat, setShowNewChat] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Load members
   useEffect(() => {
+    if (!user) return;
     getDocs(collection(db, "members")).then((snap) => {
       setMembers(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() } as Member))
-          .filter((m) => m.role !== "pending" && m.role !== "rejected" && m.id !== user?.uid)
+          .filter((m) => m.role !== "pending" && m.role !== "rejected" && m.id !== user.uid)
       );
     });
   }, [user]);
 
+  // Real-time messages for active chat
   useEffect(() => {
     if (!activeChat || !user) return;
+
     let q;
     if (activeChat.type === "group") {
-      q = query(
-        collection(db, "messages"),
-        where("type", "==", "group"),
-        orderBy("createdAt", "asc")
-      );
+      // Simple query — no composite index needed
+      q = query(collection(db, "messages"), where("type", "==", "group"));
     } else {
+      // Query by participants array — single-field index, no composite needed
       q = query(
         collection(db, "messages"),
-        where("type", "==", "direct"),
-        where("participants", "array-contains", user.uid),
-        orderBy("createdAt", "asc")
+        where("participants", "array-contains", user.uid)
       );
     }
+
     const unsub = onSnapshot(q, (snap) => {
       let msgs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Message));
+
       if (activeChat.type === "direct") {
         msgs = msgs.filter(
           (m) =>
-            (m.senderId === user.uid && m.recipientId === activeChat.peerId) ||
-            (m.senderId === activeChat.peerId && m.recipientId === user.uid)
+            m.type === "direct" &&
+            ((m.senderId === user.uid && m.recipientId === activeChat.peerId) ||
+              (m.senderId === activeChat.peerId && m.recipientId === user.uid))
         );
       }
+
+      // Sort by createdAt client-side — avoids composite index
+      msgs.sort((a, b) => {
+        const at = a.createdAt?.toMillis?.() ?? 0;
+        const bt = b.createdAt?.toMillis?.() ?? 0;
+        return at - bt;
+      });
+
       setMessages(msgs);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }, (err) => {
+      console.error("Messages error:", err);
     });
+
     return () => unsub();
   }, [activeChat, user]);
 
@@ -81,8 +96,6 @@ export default function MessagesPage() {
     if (activeChat.type === "direct") {
       payload.recipientId = activeChat.peerId;
       payload.participants = [user.uid, activeChat.peerId];
-    } else {
-      payload.groupName = "Everyone";
     }
     await addDoc(collection(db, "messages"), payload);
     setText("");
@@ -110,10 +123,10 @@ export default function MessagesPage() {
     return ts.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  // ── Chat View ──────────────────────────────────────────────────────────────
   if (view === "chat" && activeChat) {
     return (
       <div className="flex flex-col h-[calc(100vh-8rem)] max-w-2xl mx-auto">
-        {/* Header */}
         <div className="flex items-center gap-3 pb-4 border-b border-gray-200 mb-2">
           <button onClick={() => { setView("inbox"); setMessages([]); }}
             className="p-1.5 rounded-lg hover:bg-gray-100">
@@ -132,7 +145,6 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto space-y-3 py-2 pr-1">
           {messages.length === 0 && (
             <p className="text-center text-gray-400 text-sm pt-8">No messages yet. Say hello!</p>
@@ -141,14 +153,14 @@ export default function MessagesPage() {
             const isMine = m.senderId === user?.uid;
             return (
               <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[78%] ${isMine ? "items-end" : "items-start"} flex flex-col`}>
+                <div className={`max-w-[78%] flex flex-col ${isMine ? "items-end" : "items-start"}`}>
                   {!isMine && (
                     <p className="text-xs text-gray-400 mb-1 px-1">{m.senderName}</p>
                   )}
-                  <div className={`px-4 py-2.5 rounded-2xl text-sm ${
+                  <div className={`px-4 py-2.5 rounded-2xl text-sm break-words ${
                     isMine
                       ? "bg-[#3b1f6e] text-white rounded-br-sm"
-                      : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm"
+                      : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm"
                   }`}>
                     {m.content}
                   </div>
@@ -160,7 +172,6 @@ export default function MessagesPage() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <div className="flex gap-2 pt-3 border-t border-gray-200 mt-2">
           <input
             value={text}
@@ -178,6 +189,7 @@ export default function MessagesPage() {
     );
   }
 
+  // ── Inbox View ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
@@ -191,11 +203,10 @@ export default function MessagesPage() {
         </button>
       </div>
 
-      {/* Quick access */}
       <div className="grid grid-cols-2 gap-3">
         <button onClick={openGroup}
           className="bg-[#3b1f6e] text-white rounded-xl p-4 flex items-center gap-3 hover:bg-[#2a1550] transition-colors">
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
             <Users size={20} />
           </div>
           <div className="text-left">
@@ -205,7 +216,7 @@ export default function MessagesPage() {
         </button>
         <button onClick={() => setShowNewChat(true)}
           className="bg-[#f0c940] text-[#3b1f6e] rounded-xl p-4 flex items-center gap-3 hover:bg-[#e0b930] transition-colors">
-          <div className="w-10 h-10 rounded-full bg-[#3b1f6e]/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-[#3b1f6e]/10 flex items-center justify-center shrink-0">
             <User size={20} />
           </div>
           <div className="text-left">
@@ -215,12 +226,14 @@ export default function MessagesPage() {
         </button>
       </div>
 
-      {/* Member list */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="p-4 border-b border-gray-100">
-          <p className="font-semibold text-gray-800 text-sm">Members</p>
+          <p className="font-semibold text-gray-800 text-sm">Members ({members.length})</p>
         </div>
         <div className="divide-y divide-gray-50">
+          {members.length === 0 && (
+            <p className="text-center py-8 text-gray-400 text-sm">No other members yet</p>
+          )}
           {members.map((m) => (
             <button key={m.id} onClick={() => openDirect(m)}
               className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left">
@@ -229,29 +242,24 @@ export default function MessagesPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm text-gray-800">{m.displayName}</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(ROLE_COLORS as Record<string,string>)[m.role] || "bg-gray-100 text-gray-600"}`}>
-                  {(ROLE_LABELS as Record<string,string>)[m.role] || m.role}
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(ROLE_COLORS as Record<string, string>)[m.role] || "bg-gray-100 text-gray-600"}`}>
+                  {(ROLE_LABELS as Record<string, string>)[m.role] || m.role}
                 </span>
               </div>
-              <Send size={14} className="text-gray-300" />
+              <Send size={14} className="text-gray-300 shrink-0" />
             </button>
           ))}
-          {members.length === 0 && (
-            <p className="text-center py-8 text-gray-400 text-sm">No other members yet</p>
-          )}
         </div>
       </div>
 
-      {/* New chat modal */}
       {showNewChat && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[80vh] flex flex-col">
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">New Message</h3>
               <button onClick={() => { setShowNewChat(false); setSearch(""); }}
-                className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
             </div>
-
             <button onClick={openGroup}
               className="flex items-center gap-3 p-4 border-b border-gray-100 hover:bg-gray-50 text-left">
               <div className="w-10 h-10 rounded-full bg-[#3b1f6e] flex items-center justify-center shrink-0">
@@ -262,7 +270,6 @@ export default function MessagesPage() {
                 <p className="text-xs text-gray-400">Send to all members</p>
               </div>
             </button>
-
             <div className="p-3 border-b border-gray-100">
               <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
                 <Search size={14} className="text-gray-400" />
@@ -274,8 +281,7 @@ export default function MessagesPage() {
                 />
               </div>
             </div>
-
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-50">
               {filteredMembers.map((m) => (
                 <button key={m.id} onClick={() => openDirect(m)}
                   className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left">
@@ -284,7 +290,7 @@ export default function MessagesPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-gray-800">{m.displayName}</p>
-                    <p className="text-xs text-gray-400">{(ROLE_LABELS as Record<string,string>)[m.role] || m.role}</p>
+                    <p className="text-xs text-gray-400">{(ROLE_LABELS as Record<string, string>)[m.role] || m.role}</p>
                   </div>
                 </button>
               ))}

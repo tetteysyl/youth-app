@@ -47,8 +47,8 @@ service cloud.firestore {
       // Anyone can create their own member doc on registration
       allow create: if request.auth.uid == userId;
 
-      // Members can read their own profile; management can read all
-      allow read: if request.auth.uid == userId || isManagement();
+      // All approved members can read the members list (needed for messaging, attendance etc.)
+      allow read: if isApproved() || request.auth.uid == userId;
 
       // Only president can update roles; members can update their own non-role fields
       allow update: if
@@ -97,10 +97,10 @@ service cloud.firestore {
 
     // ── Notifications (internal) ───────────────────────────────────────────────
     match /notifications/{notifId} {
-      allow read: if request.auth.uid == resource.data.userId;
-      allow create: if isManagement();
+      allow read: if isApproved() && request.auth.uid == resource.data.userId;
+      allow create: if isApproved();
       allow update: if request.auth.uid == resource.data.userId;
-      allow delete: if false;
+      allow delete: if request.auth.uid == resource.data.userId;
     }
 
     // ── Financial Statements ───────────────────────────────────────────────────
@@ -112,11 +112,7 @@ service cloud.firestore {
 
     // ── Messages ───────────────────────────────────────────────────────────────
     match /messages/{msgId} {
-      allow read: if isApproved() && (
-        resource.data.type == 'group' ||
-        request.auth.uid == resource.data.senderId ||
-        request.auth.uid == resource.data.recipientId
-      );
+      allow read: if isApproved();
       allow create: if isApproved();
       allow delete: if request.auth.uid == resource.data.senderId;
     }
