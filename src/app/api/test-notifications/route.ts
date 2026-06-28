@@ -27,7 +27,7 @@ export async function GET() {
   // 3. Test email SMTP connection
   try {
     const GMAIL_USER = process.env.GMAIL_USER || "pcg.saviour@gmail.com";
-    const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD || "ybfhnravtxxzqaxd";
+    const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD || "hypsrgjcksyceiwq";
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 465,
@@ -43,7 +43,7 @@ export async function GET() {
   // 4. Try sending a real test email
   try {
     const GMAIL_USER = process.env.GMAIL_USER || "pcg.saviour@gmail.com";
-    const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD || "ybfhnravtxxzqaxd";
+    const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD || "hypsrgjcksyceiwq";
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 465,
