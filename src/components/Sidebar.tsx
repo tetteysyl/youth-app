@@ -8,12 +8,13 @@ import { can, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import Image from "next/image";
 import {
   LayoutDashboard, Users, Calendar, DollarSign,
-  BookOpen, Megaphone, LogOut, Settings, X, ClipboardList
+  BookOpen, Megaphone, LogOut, Settings, X, ClipboardList, MessageCircle
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, always: true },
   { href: "/dashboard/events", label: "Events & Activities", icon: Calendar, always: true },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageCircle, always: true },
   { href: "/dashboard/meetings", label: "Meetings", icon: ClipboardList, permission: "scheduleMeeting" },
   { href: "/dashboard/attendance", label: "Attendance", icon: Users, permission: "markAttendance" },
   { href: "/dashboard/finance", label: "Finance", icon: DollarSign, permission: "viewFinance" },

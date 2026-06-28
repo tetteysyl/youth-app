@@ -99,8 +99,26 @@ service cloud.firestore {
     match /notifications/{notifId} {
       allow read: if request.auth.uid == resource.data.userId;
       allow create: if isManagement();
-      allow update: if request.auth.uid == resource.data.userId; // mark as read
+      allow update: if request.auth.uid == resource.data.userId;
       allow delete: if false;
+    }
+
+    // ── Financial Statements ───────────────────────────────────────────────────
+    match /financial_statements/{stmtId} {
+      allow read: if isApproved();
+      allow create, update: if isFinance();
+      allow delete: if hasRole('president');
+    }
+
+    // ── Messages ───────────────────────────────────────────────────────────────
+    match /messages/{msgId} {
+      allow read: if isApproved() && (
+        resource.data.type == 'group' ||
+        request.auth.uid == resource.data.senderId ||
+        request.auth.uid == resource.data.recipientId
+      );
+      allow create: if isApproved();
+      allow delete: if request.auth.uid == resource.data.senderId;
     }
   }
 }
