@@ -1,10 +1,13 @@
 import nodemailer from "nodemailer";
 
+const GMAIL_USER = process.env.GMAIL_USER || "pcg.saviour@gmail.com";
+const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD || "ybfhnravtxxzqaxd";
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+    user: GMAIL_USER,
+    pass: GMAIL_PASS,
   },
 });
 
@@ -15,7 +18,7 @@ export async function sendAbsenceInquiry(
   meetingDate: string
 ) {
   await transporter.sendMail({
-    from: `"YPG - PCG Saviour" <${process.env.GMAIL_USER}>`,
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
     to: memberEmail,
     subject: `Absence Notice — ${meetingTitle}`,
     html: `
@@ -45,7 +48,7 @@ export async function sendAbsenceInquiry(
 
 export async function sendWelcomeEmail(memberEmail: string, memberName: string) {
   await transporter.sendMail({
-    from: `"YPG - PCG Saviour" <${process.env.GMAIL_USER}>`,
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
     to: memberEmail,
     subject: "Welcome to YPG — Your Account Has Been Approved",
     html: `
@@ -79,7 +82,7 @@ export async function sendBroadcastEmail(
 ) {
   const emails = recipients.map((r) => r.email).join(",");
   await transporter.sendMail({
-    from: `"YPG - PCG Saviour" <${process.env.GMAIL_USER}>`,
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
     bcc: emails,
     subject,
     html: `
