@@ -13,22 +13,29 @@ type Member = { id: string; displayName: string; email: string; role: string };
 type Message = {
   id: string; senderId: string; senderName: string;
   content: string; createdAt: any;
-  type: "direct" | "group"; recipientId?: string;
-  participants?: string[];
+  type: "direct" | "group";
+  conversationId?: string;
 };
+
+// Stable conversation ID between two users — same regardless of who opens chat
+function getConversationId(uid1: string, uid2: string) {
+  return [uid1, uid2].sort().join("__");
+}
 
 export default function MessagesPage() {
   const { user } = useAuthStore();
   const [members, setMembers] = useState<Member[]>([]);
   const [view, setView] = useState<"inbox" | "chat">("inbox");
-  const [activeChat, setActiveChat] = useState<{ type: "direct" | "group"; peerId?: string; peerName?: string } | null>(null);
+  const [activeChat, setActiveChat] = useState<{
+    type: "direct" | "group"; peerId?: string; peerName?: string; convId?: string;
+  } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
   const [showNewChat, setShowNewChat] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load members
+  // Load members list
   useEffect(() => {
     if (!user) return;
     getDocs(collection(db, "members")).then((snap) => {
@@ -37,49 +44,36 @@ export default function MessagesPage() {
           .map((d) => ({ id: d.id, ...d.data() } as Member))
           .filter((m) => m.role !== "pending" && m.role !== "rejected" && m.id !== user.uid)
       );
-    });
+    }).catch(console.error);
   }, [user]);
 
-  // Real-time messages for active chat
+  // Real-time messages for the active chat
   useEffect(() => {
     if (!activeChat || !user) return;
+    setMessages([]);
 
     let q;
     if (activeChat.type === "group") {
-      // Simple query — no composite index needed
       q = query(collection(db, "messages"), where("type", "==", "group"));
     } else {
-      // Query by participants array — single-field index, no composite needed
+      // Query by conversationId — simple single-field index, always works
       q = query(
         collection(db, "messages"),
-        where("participants", "array-contains", user.uid)
+        where("conversationId", "==", activeChat.convId)
       );
     }
 
     const unsub = onSnapshot(q, (snap) => {
-      let msgs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Message));
-
-      if (activeChat.type === "direct") {
-        msgs = msgs.filter(
-          (m) =>
-            m.type === "direct" &&
-            ((m.senderId === user.uid && m.recipientId === activeChat.peerId) ||
-              (m.senderId === activeChat.peerId && m.recipientId === user.uid))
-        );
-      }
-
-      // Sort by createdAt client-side — avoids composite index
-      msgs.sort((a, b) => {
-        const at = a.createdAt?.toMillis?.() ?? 0;
-        const bt = b.createdAt?.toMillis?.() ?? 0;
-        return at - bt;
-      });
-
+      const msgs = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Message))
+        .sort((a, b) => {
+          const at = a.createdAt?.toMillis?.() ?? 0;
+          const bt = b.createdAt?.toMillis?.() ?? 0;
+          return at - bt;
+        });
       setMessages(msgs);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    }, (err) => {
-      console.error("Messages error:", err);
-    });
+    }, console.error);
 
     return () => unsub();
   }, [activeChat, user]);
@@ -94,15 +88,21 @@ export default function MessagesPage() {
       type: activeChat.type,
     };
     if (activeChat.type === "direct") {
+      payload.conversationId = activeChat.convId;
       payload.recipientId = activeChat.peerId;
-      payload.participants = [user.uid, activeChat.peerId];
     }
     await addDoc(collection(db, "messages"), payload);
     setText("");
   };
 
   const openDirect = (member: Member) => {
-    setActiveChat({ type: "direct", peerId: member.id, peerName: member.displayName });
+    if (!user) return;
+    setActiveChat({
+      type: "direct",
+      peerId: member.id,
+      peerName: member.displayName,
+      convId: getConversationId(user.uid, member.id),
+    });
     setView("chat");
     setShowNewChat(false);
     setSearch("");
@@ -273,12 +273,9 @@ export default function MessagesPage() {
             <div className="p-3 border-b border-gray-100">
               <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
                 <Search size={14} className="text-gray-400" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                <input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search members..."
-                  className="flex-1 bg-transparent text-sm outline-none"
-                />
+                  className="flex-1 bg-transparent text-sm outline-none" />
               </div>
             </div>
             <div className="overflow-y-auto flex-1 divide-y divide-gray-50">

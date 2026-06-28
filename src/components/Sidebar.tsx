@@ -60,7 +60,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-white/10 border border-[#c9a52a] overflow-hidden flex items-center justify-center p-0.5">
-                <Image src="/pcg-logo.png" alt="PCG" width={36} height={36} className="object-contain" />
+                <Image src="/ypg-logo.png" alt="YPG" width={36} height={36} className="object-contain" />
               </div>
               <div>
                 <p className="text-[#f0c940] font-bold text-sm leading-tight">YPG</p>
@@ -114,7 +114,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center p-0.5">
-              <Image src="/ypg-logo.png" alt="YPG" width={28} height={28} className="object-contain" />
+              <Image src="/pcg-logo.png" alt="PCG" width={28} height={28} className="object-contain" />
             </div>
             <p className="text-white/40 text-xs">Presbyterian Church of Ghana</p>
           </div>
