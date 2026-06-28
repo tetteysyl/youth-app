@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 
-const GMAIL_USER = process.env.GMAIL_USER || "pcg.saviour@gmail.com";
-const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD || "hypsrgjcksyceiwq";
+const GMAIL_USER = "pcg.saviour@gmail.com";
+const GMAIL_PASS = "hypsrgjcksyceiwq";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
