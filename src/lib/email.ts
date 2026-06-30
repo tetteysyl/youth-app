@@ -76,6 +76,74 @@ export async function sendWelcomeEmail(memberEmail: string, memberName: string) 
   });
 }
 
+export async function sendBirthdayEmail(memberEmail: string, memberName: string) {
+  await transporter.sendMail({
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
+    to: memberEmail,
+    subject: `🎉 Happy Birthday, ${memberName.split(" ")[0]}!`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #3b1f6e, #2a1550); padding: 24px; text-align: center;">
+          <h1 style="color: #f0c940; margin: 0;">🎂 Happy Birthday!</h1>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <p>Dear <strong>${memberName}</strong>,</p>
+          <p>The entire YPG family at Presbyterian Church of Ghana — Saviour Congregation, Madina-West wishes you a very happy birthday!</p>
+          <p>May this new year of your life be filled with God's grace, good health, and abundant blessings as you continue to know His will and do it.</p>
+          <p style="margin-top: 20px; font-style: italic; color: #666;">"To Know His Will and To Do It"</p>
+          <p>With love,<br/><strong>YPG Executives</strong></p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendYafTransitionEmail(memberEmail: string, memberName: string) {
+  await transporter.sendMail({
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
+    to: memberEmail,
+    subject: `Congratulations, ${memberName.split(" ")[0]}! You're now a YAF member 🎉`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #3b1f6e, #2a1550); padding: 24px; text-align: center;">
+          <h1 style="color: #f0c940; margin: 0;">Congratulations!</h1>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <p>Dear <strong>${memberName}</strong>,</p>
+          <p>Congratulations on turning 30 and becoming a <strong>Young Adult Fellowship (YAF)</strong> member! Thank you for being a faithful member of the Young People's Guild for these past years.</p>
+          <p>We deeply appreciate all the contributions, energy, and love you have brought to the Guild. As you transition into YAF, please know that you will always be part of our family in Christ.</p>
+          <p>We pray God's continued blessings over the next chapter of your life and ministry.</p>
+          <p style="margin-top: 20px; font-style: italic; color: #666;">"To Know His Will and To Do It"</p>
+          <p>With gratitude,<br/><strong>YPG Executives</strong></p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendYafRemovalWarningEmail(memberEmail: string, memberName: string, removalDate: string) {
+  await transporter.sendMail({
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
+    to: memberEmail,
+    subject: `Your YPG account will close on ${removalDate}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #b45309; padding: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Account Closing Soon</h1>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <p>Dear <strong>${memberName}</strong>,</p>
+          <p>This is a friendly reminder that as a YAF (Young Adult Fellowship) member, your YPG account is scheduled to be automatically closed in <strong>3 days</strong>, on <strong>${removalDate}</strong>.</p>
+          <p>If you believe this is a mistake, please reach out to the YPG executives as soon as possible.</p>
+          <p>Thank you once again for your years of dedicated service and contribution to the Guild. We pray God's blessings over your continued walk with Him.</p>
+          <p style="margin-top: 20px; font-style: italic; color: #666;">"To Know His Will and To Do It"</p>
+          <p>With gratitude,<br/><strong>YPG Executives</strong></p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendBroadcastEmail(
   recipients: { email: string; name: string }[],
   subject: string,

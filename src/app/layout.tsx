@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
@@ -6,15 +6,35 @@ import { Toaster } from "react-hot-toast";
 
 const inter = Inter({ subsets: ["latin"] });
 
+export const viewport: Viewport = {
+  themeColor: "#3b1f6e",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export const metadata: Metadata = {
   title: "YPG — Presbyterian Church of Ghana",
-  description: "Young People's Guild Management System",
+  description: "Young People's Guild Management System — Saviour Congregation",
   manifest: "/manifest.json",
-  themeColor: "#1a3a5c",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "YPG PCG",
+    startupImage: "/apple-touch-icon.png",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "msapplication-TileColor": "#3b1f6e",
+    "msapplication-TileImage": "/icon-144.png",
   },
 };
 
@@ -26,6 +46,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <Toaster position="top-center" />
         </AuthProvider>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                  reg.update();
+                });
+              });
+              let refreshing = false;
+              navigator.serviceWorker.addEventListener('controllerchange', function() {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+              });
+            }
+          `
+        }} />
       </body>
     </html>
   );

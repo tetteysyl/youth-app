@@ -1,8 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { useAuthStore } from "@/lib/store";
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -11,11 +10,17 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const snap = await getDoc(doc(db, "members", firebaseUser.uid));
-        if (snap.exists()) {
-          setUser({ uid: firebaseUser.uid, ...snap.data() } as any);
-        } else {
-          setUser(null);
+        // Fetch profile via Admin SDK API (faster than Firestore client + avoids rules)
+        try {
+          const res = await fetch(`/api/get-members?uid=${firebaseUser.uid}`);
+          const data = await res.json();
+          if (data && data.uid) {
+            setUser(data);
+          } else {
+            setUser(null);
+          }
+        } catch {
+          // Network error — keep cached user so app stays usable
         }
       } else {
         setUser(null);

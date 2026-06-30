@@ -9,8 +9,10 @@ type Member = { id: string; displayName: string; email: string; role: string };
 type Message = {
   id: string; senderId: string; senderName: string;
   content: string; createdAt: number | null;
-  type: "direct" | "group"; conversationId?: string;
+  type: "direct" | "group" | "cell"; conversationId?: string; cellId?: string;
 };
+type Cell = { id: string; name: string; leaderId: string; leaderName: string; memberIds: string[] };
+type InboxSummary = Record<string, { unread: number; lastAt: number }>;
 
 function getConversationId(uid1: string, uid2: string) {
   return [uid1, uid2].sort().join("__");
@@ -19,19 +21,27 @@ function getConversationId(uid1: string, uid2: string) {
 export default function MessagesPage() {
   const { user } = useAuthStore();
   const [members, setMembers] = useState<Member[]>([]);
+  const [cells, setCells] = useState<Cell[]>([]);
   const [view, setView] = useState<"inbox" | "chat">("inbox");
+  const [inboxTab, setInboxTab] = useState<"direct" | "cells">("direct");
   const [activeChat, setActiveChat] = useState<{
-    type: "direct" | "group"; peerId?: string; peerName?: string; convId?: string;
+    type: "direct" | "group" | "cell";
+    peerId?: string;
+    peerName?: string;
+    convId?: string;
+    cellId?: string;
   } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
   const [showNewChat, setShowNewChat] = useState(false);
   const [sending, setSending] = useState(false);
+  const [inboxSummary, setInboxSummary] = useState<InboxSummary>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const inboxPollRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load members via Admin SDK API (bypasses Firestore rules)
+  // Load members via Admin SDK API
   useEffect(() => {
     if (!user) return;
     fetch("/api/get-members")
@@ -44,12 +54,42 @@ export default function MessagesPage() {
       .catch(console.error);
   }, [user]);
 
-  // Poll messages every 3 seconds (bypasses Firestore rules)
+  // Load user's cells
+  useEffect(() => {
+    if (!user) return;
+    fetch(`/api/cells?userId=${user.uid}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setCells(data);
+      })
+      .catch(console.error);
+  }, [user]);
+
+  // Poll inbox summary (unread counts + last message times) every 5s
+  useEffect(() => {
+    if (!user) return;
+    const fetchInbox = () => {
+      fetch(`/api/messages?inbox=${user.uid}`)
+        .then((r) => r.json())
+        .then((data) => { if (data && typeof data === "object") setInboxSummary(data); })
+        .catch(() => {});
+    };
+    fetchInbox();
+    inboxPollRef.current = setInterval(fetchInbox, 5000);
+    return () => { if (inboxPollRef.current) clearInterval(inboxPollRef.current); };
+  }, [user]);
+
+  // Poll messages every 3 seconds
   const fetchMessages = useCallback(async () => {
     if (!activeChat || !user) return;
-    const url = activeChat.type === "group"
-      ? "/api/messages?type=group"
-      : `/api/messages?conversationId=${activeChat.convId}`;
+    let url: string;
+    if (activeChat.type === "group") {
+      url = `/api/messages?type=group&viewerId=${user.uid}`;
+    } else if (activeChat.type === "cell") {
+      url = `/api/messages?cellId=${activeChat.cellId}&viewerId=${user.uid}`;
+    } else {
+      url = `/api/messages?conversationId=${activeChat.convId}`;
+    }
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -61,27 +101,44 @@ export default function MessagesPage() {
   }, [activeChat, user]);
 
   useEffect(() => {
-    if (!activeChat) return;
+    if (!activeChat || !user) return;
     fetchMessages();
+    // Mark messages as read when chat is opened
+    fetch("/api/messages", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId: activeChat.convId,
+        cellId: activeChat.cellId,
+        userId: user.uid,
+        type: activeChat.type,
+      }),
+    }).catch(() => {});
     pollRef.current = setInterval(fetchMessages, 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [activeChat, fetchMessages]);
+  }, [activeChat, fetchMessages, user]);
 
   const send = async () => {
     if (!text.trim() || !user || !activeChat || sending) return;
     setSending(true);
     try {
+      const body: any = {
+        senderId: user.uid,
+        senderName: user.displayName,
+        content: text.trim(),
+        type: activeChat.type,
+      };
+      if (activeChat.type === "direct") {
+        body.conversationId = activeChat.convId;
+        body.recipientId = activeChat.peerId;
+      }
+      if (activeChat.type === "cell") {
+        body.cellId = activeChat.cellId;
+      }
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          senderId: user.uid,
-          senderName: user.displayName,
-          content: text.trim(),
-          type: activeChat.type,
-          conversationId: activeChat.convId,
-          recipientId: activeChat.peerId,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to send");
       setText("");
@@ -114,6 +171,12 @@ export default function MessagesPage() {
     setShowNewChat(false);
   };
 
+  const openCellChat = (cell: Cell) => {
+    setMessages([]);
+    setActiveChat({ type: "cell", peerName: cell.name, cellId: cell.id });
+    setView("chat");
+  };
+
   const filteredMembers = members.filter((m) =>
     m.displayName?.toLowerCase().includes(search.toLowerCase())
   );
@@ -129,20 +192,28 @@ export default function MessagesPage() {
     return (
       <div className="flex flex-col h-[calc(100vh-8rem)] max-w-2xl mx-auto">
         <div className="flex items-center gap-3 pb-4 border-b border-gray-200 mb-2">
-          <button onClick={() => { setView("inbox"); setMessages([]); if (pollRef.current) clearInterval(pollRef.current); }}
+          <button onClick={() => {
+            setView("inbox"); setMessages([]);
+            if (pollRef.current) clearInterval(pollRef.current);
+            // Refresh inbox summary so badges update after reading
+            if (user) fetch(`/api/messages?inbox=${user.uid}`)
+              .then((r) => r.json()).then((d) => { if (d && typeof d === "object") setInboxSummary(d); }).catch(() => {});
+          }}
             className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft size={18} className="text-gray-600" />
           </button>
           <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-            activeChat.type === "group" ? "bg-[#3b1f6e]" : "bg-[#f0c940]"
+            activeChat.type === "group" || activeChat.type === "cell" ? "bg-[#3b1f6e]" : "bg-[#f0c940]"
           }`}>
-            {activeChat.type === "group"
+            {activeChat.type === "group" || activeChat.type === "cell"
               ? <Users size={16} className="text-white" />
               : <span className="text-[#3b1f6e] font-bold text-sm">{activeChat.peerName?.charAt(0)}</span>}
           </div>
           <div>
             <p className="font-semibold text-gray-800">{activeChat.peerName}</p>
-            <p className="text-xs text-gray-400">{activeChat.type === "group" ? "All members" : "Direct message"}</p>
+            <p className="text-xs text-gray-400">
+              {activeChat.type === "group" ? "All members" : activeChat.type === "cell" ? "Cell chat" : "Direct message"}
+            </p>
           </div>
         </div>
 
@@ -185,7 +256,7 @@ export default function MessagesPage() {
 
   // ── Inbox View ─────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <div className="page-enter space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Messages</h1>
@@ -197,6 +268,7 @@ export default function MessagesPage() {
         </button>
       </div>
 
+      {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3">
         <button onClick={openGroup}
           className="bg-[#3b1f6e] text-white rounded-xl p-4 flex items-center gap-3 hover:bg-[#2a1550] transition-colors">
@@ -220,34 +292,110 @@ export default function MessagesPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div className="p-4 border-b border-gray-100">
-          <p className="font-semibold text-gray-800 text-sm">Members ({members.length})</p>
-        </div>
-        <div className="divide-y divide-gray-50">
-          {members.length === 0 && (
-            <p className="text-center py-8 text-gray-400 text-sm">Loading members...</p>
-          )}
-          {members.map((m) => (
-            <button key={m.id} onClick={() => openDirect(m)}
-              className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left">
-              <div className="w-10 h-10 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm shrink-0">
-                {m.displayName?.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm text-gray-800">{m.displayName}</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(ROLE_COLORS as Record<string, string>)[m.role] || "bg-gray-100 text-gray-600"}`}>
-                  {(ROLE_LABELS as Record<string, string>)[m.role] || m.role}
-                </span>
-              </div>
-              <Send size={14} className="text-gray-300 shrink-0" />
-            </button>
-          ))}
-        </div>
+      {/* Inbox tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        <button
+          onClick={() => setInboxTab("direct")}
+          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+            inboxTab === "direct" ? "bg-[#3b1f6e] text-white shadow-sm" : "text-gray-600 hover:text-gray-800"
+          }`}
+        >
+          Members
+        </button>
+        <button
+          onClick={() => setInboxTab("cells")}
+          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
+            inboxTab === "cells" ? "bg-[#3b1f6e] text-white shadow-sm" : "text-gray-600 hover:text-gray-800"
+          }`}
+        >
+          Cells
+        </button>
       </div>
 
+      {/* Members tab */}
+      {inboxTab === "direct" && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="p-4 border-b border-gray-100">
+            <p className="font-semibold text-gray-800 text-sm">Members ({members.length})</p>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {members.length === 0 && (
+              <p className="text-center py-8 text-gray-400 text-sm">Loading members...</p>
+            )}
+            {[...members]
+              .sort((a, b) => {
+                const aLast = inboxSummary[a.id]?.lastAt ?? 0;
+                const bLast = inboxSummary[b.id]?.lastAt ?? 0;
+                return bLast - aLast;
+              })
+              .map((m) => {
+                const summary = inboxSummary[m.id];
+                const unread = summary?.unread ?? 0;
+                return (
+                  <button key={m.id} onClick={() => openDirect(m)}
+                    className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left">
+                    <div className="relative shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm">
+                        {m.displayName?.charAt(0).toUpperCase()}
+                      </div>
+                      {unread > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                          {unread > 9 ? "9+" : unread}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${unread > 0 ? "font-bold text-gray-900" : "font-medium text-gray-800"}`}>
+                        {m.displayName}
+                      </p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(ROLE_COLORS as Record<string, string>)[m.role] || "bg-gray-100 text-gray-600"}`}>
+                        {(ROLE_LABELS as Record<string, string>)[m.role] || m.role}
+                      </span>
+                    </div>
+                    {unread > 0
+                      ? <span className="text-xs text-red-500 font-semibold shrink-0">{unread} new</span>
+                      : <Send size={14} className="text-gray-300 shrink-0" />}
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Cells tab */}
+      {inboxTab === "cells" && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="p-4 border-b border-gray-100">
+            <p className="font-semibold text-gray-800 text-sm">My Cells ({cells.length})</p>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {cells.length === 0 && (
+              <p className="text-center py-8 text-gray-400 text-sm">You are not in any cell yet</p>
+            )}
+            {cells.map((cell) => (
+              <button
+                key={cell.id}
+                onClick={() => openCellChat(cell)}
+                className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-full bg-[#3b1f6e] flex items-center justify-center shrink-0">
+                  <Users size={18} className="text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-gray-800">{cell.name}</p>
+                  <p className="text-xs text-gray-400">
+                    Leader: {cell.leaderName} &bull; {cell.memberIds.length} member{cell.memberIds.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <Send size={14} className="text-gray-300 shrink-0" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showNewChat && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+        <div className="modal-overlay fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[80vh] flex flex-col">
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-semibold text-gray-800">New Message</h3>

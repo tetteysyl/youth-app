@@ -19,6 +19,7 @@ const TYPE_ICON: Record<string, string> = {
   absence: "⚠️",
   evangelism: "📖",
   broadcast: "📢",
+  message: "💬",
   default: "🔔",
 };
 
@@ -28,6 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notif[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const bellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +56,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setNotifications(notifs);
     });
     return () => unsub();
+  }, [user]);
+
+  // Poll for unread messages — delayed 5s on mount so it doesn't compete with page load
+  useEffect(() => {
+    if (!user) return;
+    const check = () => {
+      fetch(`/api/messages?unreadCount=${user.uid}`)
+        .then((r) => r.json())
+        .then((d) => { if (typeof d.count === "number") setUnreadMessages(d.count); })
+        .catch(() => {});
+    };
+    const delay = setTimeout(() => {
+      check();
+      const t = setInterval(check, 15000);
+      // store interval id on the timeout's closure so cleanup works
+      (delay as any)._interval = t;
+    }, 5000);
+    return () => {
+      clearTimeout(delay);
+      if ((delay as any)._interval) clearInterval((delay as any)._interval);
+    };
   }, [user]);
 
   // Close dropdown on outside click
@@ -106,10 +129,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} unreadMessages={unreadMessages} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-4 shadow-sm">
+        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-4 shadow-sm" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-500 hover:text-[#3b1f6e]">
             <Menu size={22} />
           </button>
@@ -138,7 +161,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
 
             {showNotifs && (
-              <div className="absolute right-0 top-10 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+              <div className="absolute right-0 top-10 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden notif-enter">
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                   <p className="font-semibold text-gray-800 text-sm">Notifications</p>
                   {notifications.some((n) => !n.read) && (
@@ -185,7 +208,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 page-enter">
           {children}
         </main>
       </div>

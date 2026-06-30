@@ -3,7 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
 
-function getAdminApp(): App {
+export function getAdminApp(): App {
   if (getApps().length > 0) return getApps()[0];
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
   return initializeApp({
@@ -12,6 +12,7 @@ function getAdminApp(): App {
       clientEmail: "firebase-adminsdk-fbsvc@ypg-pcg.iam.gserviceaccount.com",
       privateKey: privateKey?.replace(/\\n/g, "\n"),
     }),
+    storageBucket: "ypg-pcg.firebasestorage.app",
   });
 }
 

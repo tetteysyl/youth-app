@@ -145,7 +145,7 @@ export default function FinancePage() {
 
       {/* Add Transaction Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="modal-overlay fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
             <h3 className="font-semibold text-gray-800 mb-4">Record Transaction</h3>
             <form onSubmit={handleAddTransaction} className="space-y-3">
@@ -184,7 +184,7 @@ export default function FinancePage() {
 
       {/* Publish Statement Modal */}
       {showStatementForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="modal-overlay fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-screen overflow-y-auto">
             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <FileText size={18} className="text-green-600" /> Publish Financial Statement

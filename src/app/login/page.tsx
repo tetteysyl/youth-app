@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
@@ -18,10 +19,50 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [cellChoice, setCellChoice] = useState("none");
+  const [gender, setGender] = useState("");
+  const [isDistantMember, setIsDistantMember] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const CELL_OPTIONS = ["Charis", "Eleos", "Kleos", "Dunamis"];
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+
+  const calcAge = (dob: string) => {
+    const birth = new Date(dob);
+    if (isNaN(birth.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (mode === "register") {
+      const age = calcAge(dateOfBirth);
+      if (age === null) {
+        toast.error("Please enter a valid date of birth.");
+        return;
+      }
+      if (age < 18) {
+        toast.error("Sorry, your age does not permit you to be a YPG member. Kindly join Children Service.");
+        return;
+      }
+      if (age > 30) {
+        toast.error("Sorry, you can't be part of YPG. Your age makes you a YAF member.");
+        return;
+      }
+      if (!gender) {
+        toast.error("Please select your gender.");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       if (mode === "login") {
@@ -37,6 +78,10 @@ export default function LoginPage() {
           email,
           displayName: name,
           phone,
+          dateOfBirth,
+          cellChoice,
+          gender,
+          isDistantMember,
           role: "pending",
           createdAt: serverTimestamp(),
         });
@@ -51,6 +96,24 @@ export default function LoginPage() {
         : err.code === "auth/user-not-found"
         ? "No account found with this email."
         : err.message || "An error occurred.";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetSent(true);
+    } catch (err: any) {
+      const msg = err.code === "auth/user-not-found"
+        ? "No account found with this email."
+        : err.code === "auth/invalid-email"
+        ? "Invalid email address."
+        : err.message || "Failed to send reset email.";
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -102,14 +165,14 @@ export default function LoginPage() {
               <Image src="/pcg-logo.png" alt="PCG Logo" width={88} height={88} className="object-contain" />
             </div>
             <div className="w-px h-16 bg-white/30" />
-            <div className="w-24 h-24 rounded-full bg-white/10 border-2 border-[#c9a52a] flex items-center justify-center overflow-hidden p-1">
-              <Image src="/ypg-logo.png" alt="YPG Logo" width={88} height={88} className="object-contain" />
+            <div className="w-24 h-24 rounded-full bg-white/10 border-2 border-[#c9a52a] flex items-center justify-center overflow-hidden">
+              <Image src="/ypg-logo.png" alt="YPG Logo" width={96} height={96} className="object-cover w-full h-full" />
             </div>
           </div>
 
           <h1 className="text-3xl font-bold text-[#f0c940] mb-2">Young People's Guild</h1>
           <p className="text-white/80 text-lg mb-1">Presbyterian Church of Ghana</p>
-          <p className="text-white/50 text-sm mb-8">Saviour Congregation</p>
+          <p className="text-white/50 text-sm mb-8">Saviour Congregation, Madina-West</p>
 
           <div className="border border-[#c9a52a]/40 rounded-xl px-6 py-4 bg-white/5 max-w-xs">
             <p className="text-[#f0c940] italic text-sm text-center leading-relaxed">
@@ -117,7 +180,7 @@ export default function LoginPage() {
             </p>
           </div>
           <div className="mt-8 text-white/40 text-xs text-center">
-            <p>That one they all may be</p>
+            <p>That they all may be one</p>
           </div>
         </div>
       </div>
@@ -162,6 +225,43 @@ export default function LoginPage() {
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white" />
                 </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Gender</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={() => setGender("male")}
+                      className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                        gender === "male" ? "bg-[#3b1f6e] text-white border-[#3b1f6e]" : "border-gray-200 text-gray-600 bg-white"
+                      }`}>Male</button>
+                    <button type="button" onClick={() => setGender("female")}
+                      className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                        gender === "female" ? "bg-[#3b1f6e] text-white border-[#3b1f6e]" : "border-gray-200 text-gray-600 bg-white"
+                      }`}>Female</button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Date of Birth</label>
+                  <input type="date" required value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    max={new Date().toISOString().split("T")[0]}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white" />
+                  <p className="text-xs text-gray-400 mt-1">Only visible to the President</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Cell</label>
+                  <select value={cellChoice} onChange={(e) => setCellChoice(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white">
+                    <option value="none">No cell yet</option>
+                    {CELL_OPTIONS.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <label className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 cursor-pointer">
+                  <input type="checkbox" checked={isDistantMember}
+                    onChange={(e) => setIsDistantMember(e.target.checked)}
+                    className="accent-[#3b1f6e] mt-0.5" />
+                  <span className="text-sm text-gray-700">I am a distant member</span>
+                </label>
               </>
             )}
             <div>
@@ -177,11 +277,71 @@ export default function LoginPage() {
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white" />
             </div>
 
+            {mode === "login" && (
+              <div className="text-right -mt-1">
+                <button type="button" onClick={() => { setShowReset(true); setResetEmail(email); setResetSent(false); }}
+                  className="text-xs text-[#3b1f6e] hover:underline">
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
             <button type="submit" disabled={loading}
               className="w-full bg-[#3b1f6e] hover:bg-[#2a1550] text-white py-3 rounded-xl font-medium transition-colors disabled:opacity-50 mt-2">
               {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
             </button>
           </form>
+
+          {/* Password reset modal */}
+          {showReset && (
+            <div className="modal-overlay fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+                {resetSent ? (
+                  <div className="text-center">
+                    <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-gray-800 mb-1">Check your email</h3>
+                    <p className="text-sm text-gray-500 mb-5">
+                      A password reset link has been sent to <strong>{resetEmail}</strong>.
+                    </p>
+                    <button onClick={() => setShowReset(false)}
+                      className="w-full bg-[#3b1f6e] text-white py-2.5 rounded-xl text-sm font-medium">
+                      Done
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="font-semibold text-gray-800 mb-1">Reset your password</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Enter your email and we'll send you a link to reset your password.
+                    </p>
+                    <form onSubmit={handleReset} className="space-y-3">
+                      <input
+                        type="email" required
+                        placeholder="Your email address"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e]"
+                      />
+                      <div className="flex gap-3">
+                        <button type="button" onClick={() => setShowReset(false)}
+                          className="flex-1 border border-gray-200 py-2.5 rounded-xl text-sm text-gray-600">
+                          Cancel
+                        </button>
+                        <button type="submit" disabled={loading}
+                          className="flex-1 bg-[#3b1f6e] text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+                          {loading ? "Sending..." : "Send link"}
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">

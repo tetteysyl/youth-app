@@ -61,6 +61,9 @@ export default function MembersPage() {
               <p className="font-medium text-sm text-gray-800">{m.displayName}</p>
               <p className="text-xs text-gray-400 truncate">{m.email}</p>
               {m.phone && <p className="text-xs text-gray-400">{m.phone}</p>}
+              {can.viewDateOfBirth(user!.role) && m.dateOfBirth && (
+                <p className="text-xs text-gray-400">🎂 {m.dateOfBirth}</p>
+              )}
             </div>
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${ROLE_COLORS[m.role as keyof typeof ROLE_COLORS]}`}>
               {ROLE_LABELS[m.role as keyof typeof ROLE_LABELS]}

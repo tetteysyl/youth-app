@@ -8,17 +8,17 @@ import { can, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import Image from "next/image";
 import {
   LayoutDashboard, Users, Calendar, DollarSign,
-  BookOpen, Megaphone, LogOut, Settings, X, ClipboardList, MessageCircle
+  Megaphone, LogOut, Settings, X, ClipboardList, MessageCircle, FileText
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, always: true },
   { href: "/dashboard/events", label: "Events & Activities", icon: Calendar, always: true },
+  { href: "/dashboard/reports", label: "Reports", icon: FileText, always: true },
   { href: "/dashboard/messages", label: "Messages", icon: MessageCircle, always: true },
-  { href: "/dashboard/meetings", label: "Meetings", icon: ClipboardList, permission: "scheduleMeeting" },
+  { href: "/dashboard/meetings", label: "Meetings", icon: ClipboardList, always: true },
   { href: "/dashboard/attendance", label: "Attendance", icon: Users, permission: "markAttendance" },
   { href: "/dashboard/finance", label: "Finance", icon: DollarSign, permission: "viewFinance" },
-  { href: "/dashboard/evangelism", label: "Evangelism", icon: BookOpen, permission: "sendBibleQuote" },
   { href: "/dashboard/broadcast", label: "Broadcast", icon: Megaphone, permission: "sendBroadcast" },
   { href: "/dashboard/members", label: "Members", icon: Users, permission: "checkAbsentMembers" },
   { href: "/dashboard/admin", label: "Admin Panel", icon: Settings, permission: "accessAdmin" },
@@ -27,9 +27,10 @@ const navItems = [
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
+  unreadMessages?: number;
 }
 
-export default function Sidebar({ open, onClose }: SidebarProps) {
+export default function Sidebar({ open, onClose, unreadMessages = 0 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuthStore();
@@ -103,7 +104,14 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                     : "text-white/70 hover:text-white hover:bg-white/10"
                 }`}
                 style={active ? { background: "linear-gradient(135deg, #f0c940, #c9a52a)" } : {}}>
-                <item.icon size={17} />
+                <div className="relative">
+                  <item.icon size={17} />
+                  {item.href === "/dashboard/messages" && unreadMessages > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                      {unreadMessages > 9 ? "9+" : unreadMessages}
+                    </span>
+                  )}
+                </div>
                 {item.label}
               </Link>
             );

@@ -5,12 +5,13 @@ import { format } from "date-fns";
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, date, time } = await req.json();
+    const { title, date, time, includeDistantMembers = true } = await req.json();
     const formattedDate = date ? format(new Date(date), "MMMM d, yyyy") : date;
 
     const snap = await adminDb.collection("members").where("role", "!=", "pending").get();
     const members = snap.docs.filter((d) => d.data().role !== "rejected");
-    const recipients = members
+    const emailEligible = includeDistantMembers ? members : members.filter((d) => !d.data().isDistantMember);
+    const recipients = emailEligible
       .map((d) => ({ email: d.data().email, name: d.data().displayName }))
       .filter((r) => r.email);
 
