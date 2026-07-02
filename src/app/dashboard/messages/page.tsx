@@ -3,7 +3,7 @@ import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "@/lib/store";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
-import { Send, Users, User, Plus, ArrowLeft, Search } from "lucide-react";
+import { Send, Users, User, Plus, ArrowLeft, Search, Camera } from "lucide-react";
 import toast from "react-hot-toast";
 
 type Member = { id: string; displayName: string; email: string; role: string; photoURL?: string };
@@ -12,7 +12,7 @@ type Message = {
   content: string; createdAt: number | null;
   type: "direct" | "group" | "cell"; conversationId?: string; cellId?: string;
 };
-type Cell = { id: string; name: string; leaderId: string; leaderName: string; memberIds: string[] };
+type Cell = { id: string; name: string; leaderId: string; leaderName: string; memberIds: string[]; photoURL?: string };
 type InboxSummary = Record<string, { unread: number; lastAt: number }>;
 
 function getConversationId(uid1: string, uid2: string) {
@@ -43,6 +43,8 @@ export default function MessagesPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const inboxPollRef = useRef<NodeJS.Timeout | null>(null);
+  const cellPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCellPhoto, setUploadingCellPhoto] = useState(false);
 
   // Load members via Admin SDK API
   useEffect(() => {
@@ -153,6 +155,28 @@ export default function MessagesPage() {
     }
   };
 
+  const handleCellPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeChat?.cellId) return;
+    setUploadingCellPhoto(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("cellId", activeChat.cellId);
+      const res = await authFetch("/api/cells/photo", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setActiveChat((prev) => prev ? { ...prev, peerPhotoURL: data.photoURL } : prev);
+      setCells((prev) => prev.map((c) => c.id === activeChat.cellId ? { ...c, photoURL: data.photoURL } : c));
+      toast.success("Cell photo updated!");
+    } catch (e: any) {
+      toast.error(e.message || "Upload failed");
+    } finally {
+      setUploadingCellPhoto(false);
+      if (cellPhotoInputRef.current) cellPhotoInputRef.current.value = "";
+    }
+  };
+
   const openDirect = (member: Member) => {
     if (!user) return;
     setMessages([]);
@@ -178,7 +202,7 @@ export default function MessagesPage() {
 
   const openCellChat = (cell: Cell) => {
     setMessages([]);
-    setActiveChat({ type: "cell", peerName: cell.name, cellId: cell.id });
+    setActiveChat({ type: "cell", peerName: cell.name, cellId: cell.id, peerPhotoURL: cell.photoURL });
     setView("chat");
   };
 
@@ -207,14 +231,33 @@ export default function MessagesPage() {
             className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft size={18} className="text-gray-600" />
           </button>
-          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${
-            activeChat.type === "group" || activeChat.type === "cell" ? "bg-[#3b1f6e]" : "bg-[#f0c940]"
-          }`}>
-            {activeChat.type === "group" || activeChat.type === "cell"
-              ? <Users size={16} className="text-white" />
-              : activeChat.peerPhotoURL
-                ? <img src={activeChat.peerPhotoURL} alt="" className="w-full h-full object-cover" />
-                : <span className="text-[#3b1f6e] font-bold text-sm">{activeChat.peerName?.charAt(0)}</span>}
+          <div className="relative shrink-0">
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center overflow-hidden ${
+              activeChat.type === "group" || activeChat.type === "cell" ? "bg-[#3b1f6e]" : "bg-[#f0c940]"
+            }`}>
+              {activeChat.type === "cell"
+                ? activeChat.peerPhotoURL
+                  ? <img src={activeChat.peerPhotoURL} alt="" className="w-full h-full object-cover" />
+                  : <Users size={16} className="text-white" />
+                : activeChat.type === "group"
+                  ? <Users size={16} className="text-white" />
+                  : activeChat.peerPhotoURL
+                    ? <img src={activeChat.peerPhotoURL} alt="" className="w-full h-full object-cover" />
+                    : <span className="text-[#3b1f6e] font-bold text-sm">{activeChat.peerName?.charAt(0)}</span>}
+            </div>
+            {activeChat.type === "cell" && cells.find((c) => c.id === activeChat.cellId)?.leaderId === user?.uid && (
+              <>
+                <button
+                  onClick={() => cellPhotoInputRef.current?.click()}
+                  disabled={uploadingCellPhoto}
+                  className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#f0c940] flex items-center justify-center shadow disabled:opacity-50"
+                  title="Update cell photo"
+                >
+                  <Camera size={8} className="text-[#3b1f6e]" />
+                </button>
+                <input ref={cellPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleCellPhotoUpload} />
+              </>
+            )}
           </div>
           <div>
             <p className="font-semibold text-gray-800">{activeChat.peerName}</p>
@@ -393,8 +436,10 @@ export default function MessagesPage() {
                 onClick={() => openCellChat(cell)}
                 className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left"
               >
-                <div className="w-10 h-10 rounded-full bg-[#3b1f6e] flex items-center justify-center shrink-0">
-                  <Users size={18} className="text-white" />
+                <div className="w-10 h-10 rounded-full bg-[#3b1f6e] flex items-center justify-center shrink-0 overflow-hidden">
+                  {cell.photoURL
+                    ? <img src={cell.photoURL} alt="" className="w-full h-full object-cover" />
+                    : <Users size={18} className="text-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-800">{cell.name}</p>
