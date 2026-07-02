@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
@@ -35,7 +36,7 @@ export default function ReportsPage() {
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch("/api/reports");
+    const res = await authFetch("/api/reports");
     const data = await res.json();
     if (Array.isArray(data)) setReports(data);
     setLoading(false);
@@ -69,9 +70,9 @@ export default function ReportsPage() {
         fd.append("publishedBy", user.uid);
         fd.append("publishedByName", user.displayName || "");
         fd.append("canPublishDirectly", String(canPublishDirectly));
-        res = await fetch("/api/reports", { method: "POST", body: fd });
+        res = await authFetch("/api/reports", { method: "POST", body: fd });
       } else {
-        res = await fetch("/api/reports", {
+        res = await authFetch("/api/reports", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -95,7 +96,7 @@ export default function ReportsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this report?")) return;
-    const res = await fetch("/api/reports", {
+    const res = await authFetch("/api/reports", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reportId: id }),
@@ -108,7 +109,7 @@ export default function ReportsPage() {
     if (!user) return;
     setActingOn(id);
     try {
-      const res = await fetch("/api/reports", {
+      const res = await authFetch("/api/reports", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reportId: id, action: "approve", approvedBy: user.uid, approvedByName: user.displayName }),
@@ -127,7 +128,7 @@ export default function ReportsPage() {
     if (!confirm("Reject and discard this draft report?")) return;
     setActingOn(id);
     try {
-      const res = await fetch("/api/reports", {
+      const res = await authFetch("/api/reports", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reportId: id, action: "reject" }),

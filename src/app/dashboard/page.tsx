@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
@@ -64,11 +65,11 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // YAF countdown — 2 months (60 days) from yafStartedAt
+  // YAF countdown — 1 year (366 days) from yafStartedAt
   const yafCountdown = (() => {
     if (!user?.isYaf || !user.yafStartedAt) return null;
     const startedAt = new Date(user.yafStartedAt).getTime();
-    const deadline = startedAt + 60 * 24 * 60 * 60 * 1000;
+    const deadline = startedAt + 366 * 24 * 60 * 60 * 1000;
     const msLeft = deadline - Date.now();
     const daysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
     return { daysLeft, deadline };
@@ -79,7 +80,7 @@ export default function DashboardPage() {
     setSavingDistant(true);
     const next = !user.isDistantMember;
     try {
-      const res = await fetch("/api/member-settings", {
+      const res = await authFetch("/api/member-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uid: user.uid, isDistantMember: next }),
@@ -133,7 +134,7 @@ export default function DashboardPage() {
             </p>
             <p className="text-xs text-amber-700 mt-0.5">
               {yafCountdown.daysLeft > 0
-                ? `Your YPG account will be automatically closed in ${yafCountdown.daysLeft} day${yafCountdown.daysLeft !== 1 ? "s" : ""} — on ${format(new Date(yafCountdown.deadline), "MMMM d, yyyy")}.`
+                ? `You have ${yafCountdown.daysLeft} day${yafCountdown.daysLeft !== 1 ? "s" : ""} remaining in the YPG system. Your account will be closed on ${format(new Date(yafCountdown.deadline), "MMMM d, yyyy")}.`
                 : "Your YPG account is scheduled for closure shortly."}
               {" "}Thank you for your years of service to the Guild.
             </p>

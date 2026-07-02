@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
@@ -36,8 +37,8 @@ export default function AttendanceIndexPage() {
     }
 
     Promise.all([
-      fetch("/api/meetings").then((r) => r.json()),
-      fetch("/api/get-members").then((r) => r.json()),
+      authFetch("/api/meetings").then((r) => r.json()),
+      authFetch("/api/get-members").then((r) => r.json()),
     ])
       .then(([m, mb]) => {
         if (Array.isArray(m)) setMeetings(m);

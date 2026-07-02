@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "@/lib/store";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
@@ -28,6 +29,7 @@ export default function MessagesPage() {
     type: "direct" | "group" | "cell";
     peerId?: string;
     peerName?: string;
+    peerRole?: string;
     convId?: string;
     cellId?: string;
   } | null>(null);
@@ -44,7 +46,7 @@ export default function MessagesPage() {
   // Load members via Admin SDK API
   useEffect(() => {
     if (!user) return;
-    fetch("/api/get-members")
+    authFetch("/api/get-members")
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -57,7 +59,7 @@ export default function MessagesPage() {
   // Load user's cells
   useEffect(() => {
     if (!user) return;
-    fetch(`/api/cells?userId=${user.uid}`)
+    authFetch(`/api/cells?userId=${user.uid}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setCells(data);
@@ -69,7 +71,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!user) return;
     const fetchInbox = () => {
-      fetch(`/api/messages?inbox=${user.uid}`)
+      authFetch(`/api/messages?inbox=${user.uid}`)
         .then((r) => r.json())
         .then((data) => { if (data && typeof data === "object") setInboxSummary(data); })
         .catch(() => {});
@@ -91,7 +93,7 @@ export default function MessagesPage() {
       url = `/api/messages?conversationId=${activeChat.convId}`;
     }
     try {
-      const res = await fetch(url);
+      const res = await authFetch(url);
       const data = await res.json();
       if (Array.isArray(data)) {
         setMessages(data);
@@ -104,7 +106,7 @@ export default function MessagesPage() {
     if (!activeChat || !user) return;
     fetchMessages();
     // Mark messages as read when chat is opened
-    fetch("/api/messages", {
+    authFetch("/api/messages", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -135,7 +137,7 @@ export default function MessagesPage() {
       if (activeChat.type === "cell") {
         body.cellId = activeChat.cellId;
       }
-      const res = await fetch("/api/messages", {
+      const res = await authFetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -157,6 +159,7 @@ export default function MessagesPage() {
       type: "direct",
       peerId: member.id,
       peerName: member.displayName,
+      peerRole: member.role,
       convId: getConversationId(user.uid, member.id),
     });
     setView("chat");
@@ -196,7 +199,7 @@ export default function MessagesPage() {
             setView("inbox"); setMessages([]);
             if (pollRef.current) clearInterval(pollRef.current);
             // Refresh inbox summary so badges update after reading
-            if (user) fetch(`/api/messages?inbox=${user.uid}`)
+            if (user) authFetch(`/api/messages?inbox=${user.uid}`)
               .then((r) => r.json()).then((d) => { if (d && typeof d === "object") setInboxSummary(d); }).catch(() => {});
           }}
             className="p-1.5 rounded-lg hover:bg-gray-100">
@@ -211,9 +214,15 @@ export default function MessagesPage() {
           </div>
           <div>
             <p className="font-semibold text-gray-800">{activeChat.peerName}</p>
-            <p className="text-xs text-gray-400">
-              {activeChat.type === "group" ? "All members" : activeChat.type === "cell" ? "Cell chat" : "Direct message"}
-            </p>
+            {activeChat.type === "direct" && activeChat.peerRole ? (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(ROLE_COLORS as Record<string, string>)[activeChat.peerRole] || "bg-gray-100 text-gray-600"}`}>
+                {(ROLE_LABELS as Record<string, string>)[activeChat.peerRole] || activeChat.peerRole}
+              </span>
+            ) : (
+              <p className="text-xs text-gray-400">
+                {activeChat.type === "group" ? "All members" : "Cell chat"}
+              </p>
+            )}
           </div>
         </div>
 

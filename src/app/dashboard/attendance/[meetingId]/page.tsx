@@ -1,4 +1,5 @@
 "use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
@@ -21,8 +22,8 @@ export default function AttendancePage() {
   const loadData = useCallback(async () => {
     try {
       const [meetRes, membersRes] = await Promise.all([
-        fetch(`/api/attendance?meetingId=${meetingId}`),
-        fetch("/api/get-members"),
+        authFetch(`/api/attendance?meetingId=${meetingId}`),
+        authFetch("/api/get-members"),
       ]);
       if (!meetRes.ok) { setError((await meetRes.json()).error || "Failed to load meeting"); return; }
       const meetData = await meetRes.json();
@@ -57,7 +58,7 @@ export default function AttendancePage() {
   const handleApprove = async (uid: string) => {
     setApproving(uid);
     try {
-      const res = await fetch("/api/attendance", {
+      const res = await authFetch("/api/attendance", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingId, userId: uid, action: "approve" }),
@@ -81,7 +82,7 @@ export default function AttendancePage() {
   const handleReject = async (uid: string) => {
     setApproving(uid);
     try {
-      const res = await fetch("/api/attendance", {
+      const res = await authFetch("/api/attendance", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingId, userId: uid, action: "reject" }),
@@ -103,13 +104,13 @@ export default function AttendancePage() {
     setSaving(true);
     try {
       const presentIds = Object.entries(attendance).filter(([, v]) => v).map(([k]) => k);
-      const res = await fetch("/api/attendance", {
+      const res = await authFetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingId, presentIds, action: "save" }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      await fetch("/api/notify-attendance", {
+      await authFetch("/api/notify-attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingId, meetingTitle: meeting?.title, presentIds }),
@@ -127,13 +128,13 @@ export default function AttendancePage() {
     try {
       const presentIds = Object.entries(attendance).filter(([, v]) => v).map(([k]) => k);
       const absentIds = eligibleMembers.filter((m) => !presentIds.includes(m.id)).map((m) => m.id);
-      const res = await fetch("/api/attendance", {
+      const res = await authFetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingId, presentIds, action: "end" }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      await fetch("/api/send-absence-inquiry", {
+      await authFetch("/api/send-absence-inquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingId, meetingTitle: meeting?.title, meetingDate: meeting?.date, absentIds }),

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { requireAuth } from "@/lib/auth-server";
 
 export async function GET(req: NextRequest) {
+  const authed = await requireAuth(req);
+  if (!authed) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const uid = new URL(req.url).searchParams.get("uid");
 
-    // Single member lookup (used by AuthProvider on boot)
     if (uid) {
+      // Only allow fetching your own profile (or if you're the same user)
+      if (uid !== authed.uid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       const snap = await adminDb.collection("members").doc(uid).get();
       if (!snap.exists) return NextResponse.json(null);
       const data = snap.data() as any;
@@ -20,7 +25,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // All members list
     const snap = await adminDb.collection("members").get();
     const members = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
@@ -29,6 +33,6 @@ export async function GET(req: NextRequest) {
       headers: { "Cache-Control": "private, max-age=30" },
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

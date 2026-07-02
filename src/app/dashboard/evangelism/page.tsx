@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
 import { collection, getDocs, addDoc, query, where, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -51,7 +52,7 @@ export default function EvangelismPage() {
         sentAt: serverTimestamp(),
       });
 
-      await fetch("/api/send-bible-quote", {
+      await authFetch("/api/send-bible-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quote, reference, recipientIds, senderName: user?.displayName }),

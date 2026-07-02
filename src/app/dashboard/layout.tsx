@@ -1,12 +1,14 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
 import Sidebar from "@/components/Sidebar";
-import { Menu, Bell } from "lucide-react";
+import { Menu, Bell, Camera } from "lucide-react";
 import Image from "next/image";
+import ProfilePhotoModal from "@/components/ProfilePhotoModal";
 import {
-  collection, query, where, onSnapshot, orderBy,
+  collection, query, where, onSnapshot,
   updateDoc, doc, writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -31,6 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showNotifs, setShowNotifs] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const bellRef = useRef<HTMLDivElement>(null);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -62,7 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!user) return;
     const check = () => {
-      fetch(`/api/messages?unreadCount=${user.uid}`)
+      authFetch(`/api/messages?unreadCount=${user.uid}`)
         .then((r) => r.json())
         .then((d) => { if (typeof d.count === "number") setUnreadMessages(d.count); })
         .catch(() => {});
@@ -141,7 +144,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="hidden sm:block w-7 h-7 overflow-hidden">
               <Image src="/ypg-logo.png" alt="YPG" width={28} height={28} className="object-contain" />
             </div>
-            <span className="font-bold text-[#3b1f6e] hidden sm:block text-sm">YPG Management System</span>
+            <span className="font-bold text-[#3b1f6e] hidden sm:block text-sm">SAVIOUR YPG</span>
           </div>
 
           <div className="flex-1" />
@@ -202,11 +205,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
           </div>
 
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-[#3b1f6e] font-bold text-sm"
-            style={{ background: "linear-gradient(135deg, #f0c940, #c9a52a)" }}>
-            {user.displayName?.charAt(0).toUpperCase()}
-          </div>
+          <button
+            onClick={() => setShowPhotoModal(true)}
+            className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-[#3b1f6e] font-bold text-sm shrink-0 group"
+            style={{ background: "linear-gradient(135deg, #f0c940, #c9a52a)" }}
+            title="Change profile picture"
+          >
+            {user.photoURL
+              ? <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+              : user.displayName?.charAt(0).toUpperCase()
+            }
+            <span className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Camera size={12} className="text-white" />
+            </span>
+          </button>
         </header>
+
+        {showPhotoModal && <ProfilePhotoModal onClose={() => setShowPhotoModal(false)} />}
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 page-enter">
           {children}

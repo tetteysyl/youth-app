@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
@@ -18,7 +19,7 @@ export default function BroadcastPage() {
 
   const loadBroadcasts = async () => {
     try {
-      const res = await fetch("/api/broadcast");
+      const res = await authFetch("/api/broadcast");
       const data = await res.json();
       if (Array.isArray(data)) setBroadcasts(data);
     } catch {} finally {
@@ -35,7 +36,7 @@ export default function BroadcastPage() {
     e.preventDefault();
     setSending(true);
     try {
-      const res = await fetch("/api/broadcast", {
+      const res = await authFetch("/api/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject, message, senderId: user?.uid, senderName: user?.displayName }),

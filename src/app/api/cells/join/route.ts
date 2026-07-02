@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-// POST /api/cells/join — add a member to a cell (by name). Used both for self-chosen
-// cells at sign-up approval (notify: false) and President-initiated assignment (notify: true).
-// Creates the cell if it doesn't exist yet. No-op if cellName is "none"/empty.
 export async function POST(req: NextRequest) {
+  const caller = await requireAuthWithRole(req);
+  if (!caller) return unauth();
+  if (caller.role !== "president") return forbidden();
+
   try {
     const { cellName, memberId, memberName, notify } = await req.json();
     if (!memberId || !cellName || cellName === "none") {

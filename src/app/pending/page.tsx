@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
 import { signOut } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
@@ -46,7 +47,7 @@ export default function PendingPage() {
     if (!gender) { toast.error("Please select your gender."); return; }
     setSaving(true);
     try {
-      const res = await fetch("/api/complete-profile", {
+      const res = await authFetch("/api/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uid, dateOfBirth, cellChoice, gender, isDistantMember }),

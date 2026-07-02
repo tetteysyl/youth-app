@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -12,7 +13,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (firebaseUser) {
         // Fetch profile via Admin SDK API (faster than Firestore client + avoids rules)
         try {
-          const res = await fetch(`/api/get-members?uid=${firebaseUser.uid}`);
+          const res = await authFetch(`/api/get-members?uid=${firebaseUser.uid}`);
           const data = await res.json();
           if (data && data.uid) {
             setUser(data);

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
+import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-// GET /api/admin/members — list all active (non-pending/rejected) members,
-// auto-pruning any Firestore doc whose Firebase Auth account no longer exists
-// (e.g. someone was deleted directly from the Firebase Auth console).
-export async function GET() {
+const ADMIN_ROLES = ["president", "general_secretary", "assistant_general_secretary"];
+
+export async function GET(req: NextRequest) {
+  const caller = await requireAuthWithRole(req);
+  if (!caller) return unauth();
+  if (!ADMIN_ROLES.includes(caller.role)) return forbidden();
+
   try {
     const snap = await adminDb.collection("members")
       .where("role", "not-in", ["pending", "rejected"])
@@ -17,7 +21,6 @@ export async function GET() {
           return { id: d.id, ...d.data(), orphaned: false };
         } catch (e: any) {
           if (e.code === "auth/user-not-found") return { id: d.id, ...d.data(), orphaned: true };
-          // Unrelated error (network etc.) — don't treat as orphaned, just pass through
           return { id: d.id, ...d.data(), orphaned: false };
         }
       })
@@ -28,8 +31,6 @@ export async function GET() {
       const batch = adminDb.batch();
       orphaned.forEach((m) => batch.delete(adminDb.collection("members").doc(m.id)));
       await batch.commit();
-
-      // Also strip them out of any cell they were left in
       const cellsSnap = await adminDb.collection("cells").get();
       const cellBatch = adminDb.batch();
       let cellBatchNeeded = false;
@@ -48,15 +49,19 @@ export async function GET() {
     const active = results.filter((m) => !m.orphaned).map(({ orphaned, ...rest }) => rest);
     return NextResponse.json(active, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
 
-// DELETE /api/admin/members — President removes a member entirely (Firestore doc + Auth account + cell membership)
 export async function DELETE(req: NextRequest) {
+  const caller = await requireAuthWithRole(req);
+  if (!caller) return unauth();
+  if (caller.role !== "president") return forbidden();
+
   try {
     const { uid } = await req.json();
     if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
+    if (uid === caller.uid) return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
 
     try {
       await adminAuth.deleteUser(uid);
@@ -78,6 +83,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

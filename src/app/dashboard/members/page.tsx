@@ -1,27 +1,50 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useAuthStore } from "@/lib/store";
 import { can, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import { useRouter } from "next/navigation";
-import { Users, Search } from "lucide-react";
+import { Users, Search, UserMinus } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function MembersPage() {
   const { user } = useAuthStore();
   const router = useRouter();
   const [members, setMembers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const isPresident = user?.role === "president";
+
+  const load = async () => {
+    const res = await authFetch("/api/admin/members", { cache: "no-store" });
+    const data = await res.json();
+    if (Array.isArray(data)) setMembers(data);
+  };
 
   useEffect(() => {
     if (!user || !can.checkAbsentMembers(user.role)) { router.replace("/dashboard"); return; }
-    const load = async () => {
-      const q = query(collection(db, "members"), where("role", "!=", "pending"));
-      const snap = await getDocs(q);
-      setMembers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    };
     load();
   }, [user]);
+
+  const removeMember = async (uid: string, name: string) => {
+    if (!confirm(`Remove ${name} from YPG entirely? This permanently deletes their account.`)) return;
+    setRemoving(uid);
+    try {
+      const res = await authFetch("/api/admin/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      toast.success(`${name} has been removed.`);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to remove member.");
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   const filtered = members.filter((m) =>
     m.displayName?.toLowerCase().includes(search.toLowerCase()) ||
@@ -54,8 +77,11 @@ export default function MembersPage() {
         )}
         {filtered.map((m) => (
           <div key={m.id} className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-full bg-[#1a3a5c] flex items-center justify-center text-white font-bold text-sm shrink-0">
-              {m.displayName?.charAt(0).toUpperCase()}
+            <div className="relative w-10 h-10 rounded-full bg-[#3b1f6e] flex items-center justify-center text-white font-bold text-sm shrink-0 overflow-hidden">
+              {m.photoURL
+                ? <img src={m.photoURL} alt={m.displayName} className="w-full h-full object-cover" />
+                : m.displayName?.charAt(0).toUpperCase()
+              }
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm text-gray-800">{m.displayName}</p>
@@ -65,9 +91,31 @@ export default function MembersPage() {
                 <p className="text-xs text-gray-400">🎂 {m.dateOfBirth}</p>
               )}
             </div>
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${ROLE_COLORS[m.role as keyof typeof ROLE_COLORS]}`}>
-              {ROLE_LABELS[m.role as keyof typeof ROLE_LABELS]}
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-col items-end gap-1">
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${ROLE_COLORS[m.role as keyof typeof ROLE_COLORS]}`}>
+                  {ROLE_LABELS[m.role as keyof typeof ROLE_LABELS]}
+                </span>
+                {m.isYaf && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 whitespace-nowrap">
+                    🎓 Ready to graduate to YAF
+                  </span>
+                )}
+              </div>
+              {isPresident && m.id !== user?.uid && (
+                <button
+                  onClick={() => removeMember(m.id, m.displayName)}
+                  disabled={removing === m.id}
+                  title="Remove member"
+                  className="p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
+                >
+                  {removing === m.id
+                    ? <div className="w-4 h-4 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
+                    : <UserMinus size={16} />
+                  }
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

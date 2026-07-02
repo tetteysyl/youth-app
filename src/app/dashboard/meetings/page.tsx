@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
@@ -32,13 +33,13 @@ export default function MeetingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch("/api/meetings", {
+      const res = await authFetch("/api/meetings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, createdBy: user?.uid }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      await fetch("/api/notify-meeting", {
+      await authFetch("/api/notify-meeting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: form.title, date: form.date, time: form.time, includeDistantMembers }),
@@ -60,7 +61,7 @@ export default function MeetingsPage() {
     if (!user) return;
     setCheckingIn(meetingId);
     try {
-      const res = await fetch("/api/attendance", {
+      const res = await authFetch("/api/attendance", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meetingId, userId: user.uid, action: "selfCheckin" }),

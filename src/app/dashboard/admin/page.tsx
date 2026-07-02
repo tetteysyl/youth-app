@@ -1,4 +1,5 @@
-"use client";
+﻿"use client";
+import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -52,7 +53,7 @@ export default function AdminPage() {
   const loadData = async () => {
     const [pendingSnap, activeMembers] = await Promise.all([
       getDocs(query(collection(db, "members"), where("role", "==", "pending"))),
-      fetch("/api/admin/members", { cache: "no-store" }).then((r) => r.json()),
+      authFetch("/api/admin/members", { cache: "no-store" }).then((r) => r.json()),
     ]);
     setPending(pendingSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
     if (Array.isArray(activeMembers)) setAllMembers(activeMembers);
@@ -62,7 +63,7 @@ export default function AdminPage() {
     if (!confirm(`Remove ${name} from YPG entirely? This deletes their account and cannot be undone.`)) return;
     setRemoving(uid);
     try {
-      const res = await fetch("/api/admin/members", {
+      const res = await authFetch("/api/admin/members", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uid }),
@@ -81,8 +82,8 @@ export default function AdminPage() {
   const loadCells = async () => {
     try {
       const [cellsRes, membersRes] = await Promise.all([
-        fetch("/api/cells", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/admin/members", { cache: "no-store" }).then((r) => r.json()),
+        authFetch("/api/cells", { cache: "no-store" }).then((r) => r.json()),
+        authFetch("/api/admin/members", { cache: "no-store" }).then((r) => r.json()),
       ]);
       if (Array.isArray(cellsRes)) setCells(cellsRes);
       if (Array.isArray(membersRes)) setCellMembers(membersRes);
@@ -95,7 +96,7 @@ export default function AdminPage() {
     setLoading((p) => ({ ...p, [uid]: true }));
     try {
       await updateDoc(doc(db, "members", uid), { role: "member", approvedAt: serverTimestamp() });
-      await fetch("/api/approve-member", {
+      await authFetch("/api/approve-member", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, name }),
@@ -103,7 +104,7 @@ export default function AdminPage() {
       // Add to their chosen cell, if any
       const pendingMember = pending.find((m) => m.id === uid);
       if (pendingMember?.cellChoice && pendingMember.cellChoice !== "none") {
-        await fetch("/api/cells/join", {
+        await authFetch("/api/cells/join", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cellName: pendingMember.cellChoice, memberId: uid, memberName: name }),
@@ -155,7 +156,7 @@ export default function AdminPage() {
   const assignToCell = async (memberId: string, memberName: string, cellName: string) => {
     setAssigning(memberId);
     try {
-      const res = await fetch("/api/cells/join", {
+      const res = await authFetch("/api/cells/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cellName, memberId, memberName, notify: true }),
@@ -227,14 +228,14 @@ export default function AdminPage() {
           payload.leaderId = cellForm.leaderId;
           payload.leaderName = cellForm.leaderName;
         }
-        await fetch("/api/cells", {
+        await authFetch("/api/cells", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
         toast.success("Cell updated!");
       } else {
-        await fetch("/api/cells", {
+        await authFetch("/api/cells", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
