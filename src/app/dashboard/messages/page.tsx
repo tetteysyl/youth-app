@@ -6,7 +6,7 @@ import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import { Send, Users, User, Plus, ArrowLeft, Search } from "lucide-react";
 import toast from "react-hot-toast";
 
-type Member = { id: string; displayName: string; email: string; role: string };
+type Member = { id: string; displayName: string; email: string; role: string; photoURL?: string };
 type Message = {
   id: string; senderId: string; senderName: string;
   content: string; createdAt: number | null;
@@ -30,6 +30,7 @@ export default function MessagesPage() {
     peerId?: string;
     peerName?: string;
     peerRole?: string;
+    peerPhotoURL?: string;
     convId?: string;
     cellId?: string;
   } | null>(null);
@@ -160,6 +161,7 @@ export default function MessagesPage() {
       peerId: member.id,
       peerName: member.displayName,
       peerRole: member.role,
+      peerPhotoURL: member.photoURL,
       convId: getConversationId(user.uid, member.id),
     });
     setView("chat");
@@ -205,12 +207,14 @@ export default function MessagesPage() {
             className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft size={18} className="text-gray-600" />
           </button>
-          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${
             activeChat.type === "group" || activeChat.type === "cell" ? "bg-[#3b1f6e]" : "bg-[#f0c940]"
           }`}>
             {activeChat.type === "group" || activeChat.type === "cell"
               ? <Users size={16} className="text-white" />
-              : <span className="text-[#3b1f6e] font-bold text-sm">{activeChat.peerName?.charAt(0)}</span>}
+              : activeChat.peerPhotoURL
+                ? <img src={activeChat.peerPhotoURL} alt="" className="w-full h-full object-cover" />
+                : <span className="text-[#3b1f6e] font-bold text-sm">{activeChat.peerName?.charAt(0)}</span>}
           </div>
           <div>
             <p className="font-semibold text-gray-800">{activeChat.peerName}</p>
@@ -344,8 +348,10 @@ export default function MessagesPage() {
                   <button key={m.id} onClick={() => openDirect(m)}
                     className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left">
                     <div className="relative shrink-0">
-                      <div className="w-10 h-10 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm">
-                        {m.displayName?.charAt(0).toUpperCase()}
+                      <div className="w-10 h-10 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm overflow-hidden">
+                        {m.photoURL
+                          ? <img src={m.photoURL} alt="" className="w-full h-full object-cover" />
+                          : m.displayName?.charAt(0).toUpperCase()}
                       </div>
                       {unread > 0 && (
                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
@@ -433,8 +439,10 @@ export default function MessagesPage() {
               {filteredMembers.map((m) => (
                 <button key={m.id} onClick={() => openDirect(m)}
                   className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 text-left">
-                  <div className="w-9 h-9 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm shrink-0">
-                    {m.displayName?.charAt(0).toUpperCase()}
+                  <div className="w-9 h-9 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm shrink-0 overflow-hidden">
+                    {m.photoURL
+                      ? <img src={m.photoURL} alt="" className="w-full h-full object-cover" />
+                      : m.displayName?.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-gray-800">{m.displayName}</p>
