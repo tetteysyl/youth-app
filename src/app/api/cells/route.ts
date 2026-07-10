@@ -5,6 +5,10 @@ import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
 export const DEFAULT_CELLS = ["Charis", "Eleos", "Kleos", "Dunamis"];
 
+let _allCellsCache: { data: any[]; ts: number } | null = null;
+const CELLS_TTL = 60_000;
+export function invalidateCellsCache() { _allCellsCache = null; }
+
 const CELL_MANAGERS = ["president", "general_secretary"];
 
 async function ensureDefaultCells() {
@@ -53,19 +57,24 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
-    if (!userId) {
-      await ensureDefaultCells();
-      const allSnap = await adminDb.collection("cells").get();
-      await pruneDeletedMembers(allSnap.docs);
-    }
-    let snap;
+
     if (userId) {
-      snap = await adminDb.collection("cells").where("memberIds", "array-contains", userId).get();
-    } else {
-      snap = await adminDb.collection("cells").get();
+      // Per-user query — not cached, but bounded and fast (indexed)
+      const snap = await adminDb.collection("cells").where("memberIds", "array-contains", userId).get();
+      const cells = snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }));
+      return NextResponse.json(cells, { headers: { "Cache-Control": "private, max-age=60" } });
     }
-    const cells = snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }));
-    return NextResponse.json(cells, { headers: { "Cache-Control": "no-store" } });
+
+    // All-cells view: serve from cache, prune/seed only when cache is cold
+    if (_allCellsCache && Date.now() - _allCellsCache.ts < CELLS_TTL) {
+      return NextResponse.json(_allCellsCache.data, { headers: { "Cache-Control": "private, max-age=60" } });
+    }
+    await ensureDefaultCells();
+    const allSnap = await adminDb.collection("cells").get();
+    await pruneDeletedMembers(allSnap.docs);
+    const cells = allSnap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }));
+    _allCellsCache = { data: cells, ts: Date.now() };
+    return NextResponse.json(cells, { headers: { "Cache-Control": "private, max-age=60" } });
   } catch (err: any) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
@@ -85,6 +94,7 @@ export async function POST(req: NextRequest) {
       name, leaderId, leaderName, memberIds: allMemberIds,
       createdBy: caller.uid, createdAt: FieldValue.serverTimestamp(),
     });
+    invalidateCellsCache();
     return NextResponse.json({ id: ref.id });
   } catch (err: any) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
@@ -112,6 +122,7 @@ export async function PATCH(req: NextRequest) {
       await removeMembersFromOtherCells(allMemberIds, cellId);
     }
     await adminDb.collection("cells").doc(cellId).update(fields);
+    invalidateCellsCache();
     const now = new Date();
     const newMemberIds: string[] = fields.memberIds ?? oldMemberIds;
     const addedMemberIds = newMemberIds.filter((id: string) => !oldMemberIds.includes(id));

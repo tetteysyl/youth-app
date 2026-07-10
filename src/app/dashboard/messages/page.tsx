@@ -80,7 +80,7 @@ export default function MessagesPage() {
         .catch(() => {});
     };
     fetchInbox();
-    inboxPollRef.current = setInterval(fetchInbox, 5000);
+    inboxPollRef.current = setInterval(fetchInbox, 15000);
     return () => { if (inboxPollRef.current) clearInterval(inboxPollRef.current); };
   }, [user]);
 
@@ -119,7 +119,7 @@ export default function MessagesPage() {
         type: activeChat.type,
       }),
     }).catch(() => {});
-    pollRef.current = setInterval(fetchMessages, 3000);
+    pollRef.current = setInterval(fetchMessages, 6000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeChat, fetchMessages, user]);
 

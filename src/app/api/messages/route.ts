@@ -32,25 +32,34 @@ export async function GET(req: NextRequest) {
 
     if (inbox) {
       if (inbox !== caller.uid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      const [sentSnap, recvSnap] = await Promise.all([
-        adminDb.collection("messages").where("senderId", "==", inbox).where("type", "==", "direct").get(),
-        adminDb.collection("messages").where("recipientId", "==", inbox).where("type", "==", "direct").get(),
+      // Fetch only unread received + last 200 sent/received to build the inbox summary.
+      // This avoids scanning the full messages collection as history grows.
+      const [unreadSnap, recentSnap] = await Promise.all([
+        adminDb.collection("messages").where("recipientId", "==", inbox).where("type", "==", "direct").where("read", "==", false).get(),
+        adminDb.collection("messages").where("recipientId", "==", inbox).where("type", "==", "direct").orderBy("createdAt", "desc").limit(200).get(),
       ]);
       const convMap: Record<string, { unread: number; lastAt: number }> = {};
-      const allDocs = new Map<string, FirebaseFirestore.DocumentData>();
-      sentSnap.docs.forEach((d) => allDocs.set(d.id, d.data()));
-      recvSnap.docs.forEach((d) => allDocs.set(d.id, d.data()));
-      for (const data of allDocs.values()) {
+      // Count unread per peer
+      unreadSnap.docs.forEach((d) => {
+        const data = d.data();
         const convId: string = data.conversationId ?? "";
-        if (!convId) continue;
+        if (!convId) return;
+        const [a, b] = convId.split("__");
+        const peerId = a === inbox ? b : a;
+        if (!convMap[peerId]) convMap[peerId] = { unread: 0, lastAt: 0 };
+        convMap[peerId].unread += 1;
+      });
+      // Track last message time from recent received messages
+      recentSnap.docs.forEach((d) => {
+        const data = d.data();
+        const convId: string = data.conversationId ?? "";
+        if (!convId) return;
         const [a, b] = convId.split("__");
         const peerId = a === inbox ? b : a;
         const ts: number = data.createdAt?.toMillis?.() ?? 0;
-        const isUnread = data.recipientId === inbox && data.read === false;
         if (!convMap[peerId]) convMap[peerId] = { unread: 0, lastAt: 0 };
-        if (isUnread) convMap[peerId].unread += 1;
         if (ts > convMap[peerId].lastAt) convMap[peerId].lastAt = ts;
-      }
+      });
       return NextResponse.json(convMap);
     }
 
@@ -63,38 +72,35 @@ export async function GET(req: NextRequest) {
     }
 
     if (cellId) {
-      const snap = await adminDb.collection("messages").where("cellId", "==", cellId).get();
+      const snap = await adminDb.collection("messages").where("cellId", "==", cellId)
+        .orderBy("createdAt", "desc").limit(100).get();
       let msgs = snap.docs
         .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }))
-        .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+        .reverse();
       if (viewerApprovedAt) msgs = msgs.filter((m: any) => (m.createdAt ?? 0) >= viewerApprovedAt!);
       return NextResponse.json(msgs);
     }
 
     if (type === "group") {
-      const snap = await adminDb.collection("messages").where("type", "==", "group").get();
+      const snap = await adminDb.collection("messages").where("type", "==", "group")
+        .orderBy("createdAt", "desc").limit(100).get();
       let msgs = snap.docs
         .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }))
-        .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+        .reverse();
       if (viewerApprovedAt) msgs = msgs.filter((m: any) => (m.createdAt ?? 0) >= viewerApprovedAt!);
       return NextResponse.json(msgs);
     }
 
     if (conversationId) {
-      // Verify caller is party to this conversation
       const [idA, idB] = conversationId.split("__");
       if (caller.uid !== idA && caller.uid !== idB) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      const snap1 = await adminDb.collection("messages").where("conversationId", "==", conversationId).get();
-      const snap2 = await adminDb.collection("messages").where("participants", "array-contains", idA).get();
-      const allDocs = new Map<string, any>();
-      snap1.docs.forEach((d) => allDocs.set(d.id, d));
-      snap2.docs.filter((d) => (d.data().participants as string[] || []).includes(idB))
-        .forEach((d) => allDocs.set(d.id, d));
-      const msgs = Array.from(allDocs.values())
+      const snap = await adminDb.collection("messages").where("conversationId", "==", conversationId)
+        .orderBy("createdAt", "desc").limit(100).get();
+      const msgs = snap.docs
         .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }))
-        .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+        .reverse();
       return NextResponse.json(msgs);
     }
 

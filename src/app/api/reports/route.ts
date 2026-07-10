@@ -8,10 +8,17 @@ const PUBLISHERS = ["president", "general_secretary"];
 const ALLOWED_REPORT_ROLES = ["president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer"];
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
 
+let _reportsCache: { data: any[]; ts: number } | null = null;
+const REPORTS_TTL = 60_000;
+function invalidateReportsCache() { _reportsCache = null; }
+
 export async function GET(req: NextRequest) {
   const authed = await requireAuth(req);
   if (!authed) return unauth();
   try {
+    if (_reportsCache && Date.now() - _reportsCache.ts < REPORTS_TTL) {
+      return NextResponse.json(_reportsCache.data, { headers: { "Cache-Control": "private, max-age=60" } });
+    }
     const snap = await adminDb.collection("reports").get();
     const reports = snap.docs
       .map((d) => {
@@ -26,7 +33,8 @@ export async function GET(req: NextRequest) {
         };
       })
       .sort((a, b) => (b.publishedAt ?? b.submittedAt ?? 0) - (a.publishedAt ?? a.submittedAt ?? 0));
-    return NextResponse.json(reports);
+    _reportsCache = { data: reports, ts: Date.now() };
+    return NextResponse.json(reports, { headers: { "Cache-Control": "private, max-age=60" } });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }
 
@@ -59,6 +67,7 @@ export async function POST(req: NextRequest) {
       if (canPublishDirectly) { payload.publishedBy = caller.uid; payload.publishedByName = caller.displayName; payload.publishedAt = FieldValue.serverTimestamp(); }
       else { payload.submittedBy = caller.uid; payload.submittedByName = caller.displayName; payload.submittedAt = FieldValue.serverTimestamp(); }
       const ref = await adminDb.collection("reports").add(payload);
+      invalidateReportsCache();
       if (!canPublishDirectly) await notifyApprovers(title, caller.displayName);
       return NextResponse.json({ id: ref.id, fileUrl, status: payload.status });
     } else {
@@ -77,6 +86,7 @@ export async function POST(req: NextRequest) {
       if (canPublishDirectly) { payload.publishedBy = caller.uid; payload.publishedByName = caller.displayName; payload.publishedAt = FieldValue.serverTimestamp(); }
       else { payload.submittedBy = caller.uid; payload.submittedByName = caller.displayName; payload.submittedAt = FieldValue.serverTimestamp(); }
       const ref = await adminDb.collection("reports").add(payload);
+      invalidateReportsCache();
       if (!canPublishDirectly) await notifyApprovers(title, caller.displayName);
       return NextResponse.json({ id: ref.id, status: payload.status });
     }
@@ -97,6 +107,7 @@ export async function PATCH(req: NextRequest) {
     } else {
       await adminDb.collection("reports").doc(reportId).delete();
     }
+    invalidateReportsCache();
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }
@@ -108,6 +119,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const { reportId } = await req.json();
     if (!reportId) return NextResponse.json({ error: "Missing reportId" }, { status: 400 });
+    invalidateReportsCache();
     await adminDb.collection("reports").doc(reportId).delete();
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }

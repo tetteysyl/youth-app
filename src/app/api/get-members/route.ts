@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAuth } from "@/lib/auth-server";
 
+let _membersCache: { data: any[]; ts: number } | null = null;
+const MEMBERS_TTL = 60_000;
+
+export function invalidateMembersCache() { _membersCache = null; }
+
 export async function GET(req: NextRequest) {
   const authed = await requireAuth(req);
   if (!authed) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -10,7 +15,6 @@ export async function GET(req: NextRequest) {
     const uid = new URL(req.url).searchParams.get("uid");
 
     if (uid) {
-      // Only allow fetching your own profile (or if you're the same user)
       if (uid !== authed.uid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       const snap = await adminDb.collection("members").doc(uid).get();
       if (!snap.exists) return NextResponse.json(null);
@@ -25,13 +29,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (_membersCache && Date.now() - _membersCache.ts < MEMBERS_TTL) {
+      return NextResponse.json(_membersCache.data, { headers: { "Cache-Control": "private, max-age=60" } });
+    }
     const snap = await adminDb.collection("members").get();
     const members = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((m: any) => m.role !== "pending" && m.role !== "rejected");
-    return NextResponse.json(members, {
-      headers: { "Cache-Control": "private, max-age=30" },
-    });
+    _membersCache = { data: members, ts: Date.now() };
+    return NextResponse.json(members, { headers: { "Cache-Control": "private, max-age=60" } });
   } catch (err: any) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

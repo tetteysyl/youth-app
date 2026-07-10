@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
-import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { requireAuthWithRole, unauth, forbidden, invalidateProfileCache } from "@/lib/auth-server";
+import { invalidateMembersCache } from "@/app/api/get-members/route";
+import { invalidateCellsCache } from "@/app/api/cells/route";
 
 const ADMIN_ROLES = ["president", "general_secretary", "assistant_general_secretary"];
 
@@ -70,6 +72,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     await adminDb.collection("members").doc(uid).delete();
+    invalidateProfileCache(uid);
+    invalidateMembersCache();
 
     const cellsSnap = await adminDb.collection("cells").where("memberIds", "array-contains", uid).get();
     const batch = adminDb.batch();
@@ -79,7 +83,7 @@ export async function DELETE(req: NextRequest) {
       if (c.data().leaderId === uid) { updates.leaderId = ""; updates.leaderName = ""; }
       batch.update(c.ref, updates);
     });
-    if (cellsSnap.docs.length > 0) await batch.commit();
+    if (cellsSnap.docs.length > 0) { await batch.commit(); invalidateCellsCache(); }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
