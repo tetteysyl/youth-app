@@ -4,12 +4,12 @@ import { requireAuthWithRole, unauth, forbidden, invalidateProfileCache } from "
 import { invalidateMembersCache } from "@/app/api/get-members/route";
 import { invalidateCellsCache } from "@/app/api/cells/route";
 
-const ADMIN_ROLES = ["president", "general_secretary", "assistant_general_secretary"];
+const EXECUTIVE_ROLES = ["president", "vice_president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer", "evangelism_coordinator", "male_organizer", "female_organizer"];
 
 export async function GET(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
-  if (!ADMIN_ROLES.includes(caller.role)) return forbidden();
+  if (!EXECUTIVE_ROLES.includes(caller.role)) return forbidden();
 
   try {
     const snap = await adminDb.collection("members")
