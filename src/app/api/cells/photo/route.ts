@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb, adminStorage } from "@/lib/firebase-admin";
 import { requireAuth, unauth, forbidden } from "@/lib/auth-server";
+import { invalidateCellsCache } from "@/app/api/cells/route";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
     await gcsFile.save(buffer, { contentType: file.type, public: true });
     const photoURL = `https://storage.googleapis.com/${bucket.name}/${dest}`;
     await adminDb.collection("cells").doc(cellId).update({ photoURL });
+    invalidateCellsCache();
     return NextResponse.json({ photoURL });
   } catch {
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });

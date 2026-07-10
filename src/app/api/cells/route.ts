@@ -62,19 +62,19 @@ export async function GET(req: NextRequest) {
       // Per-user query — not cached, but bounded and fast (indexed)
       const snap = await adminDb.collection("cells").where("memberIds", "array-contains", userId).get();
       const cells = snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }));
-      return NextResponse.json(cells, { headers: { "Cache-Control": "private, max-age=60" } });
+      return NextResponse.json(cells, { headers: { "Cache-Control": "no-store" } });
     }
 
     // All-cells view: serve from cache, prune/seed only when cache is cold
     if (_allCellsCache && Date.now() - _allCellsCache.ts < CELLS_TTL) {
-      return NextResponse.json(_allCellsCache.data, { headers: { "Cache-Control": "private, max-age=60" } });
+      return NextResponse.json(_allCellsCache.data, { headers: { "Cache-Control": "no-store" } });
     }
     await ensureDefaultCells();
     const allSnap = await adminDb.collection("cells").get();
     await pruneDeletedMembers(allSnap.docs);
     const cells = allSnap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }));
     _allCellsCache = { data: cells, ts: Date.now() };
-    return NextResponse.json(cells, { headers: { "Cache-Control": "private, max-age=60" } });
+    return NextResponse.json(cells, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
@@ -115,9 +115,10 @@ export async function PATCH(req: NextRequest) {
     const oldMemberIds: string[] = existing.memberIds || [];
     const oldLeaderId: string = existing.leaderId || "";
     const cellName: string = fields.name ?? existing.name ?? "";
-    if (fields.memberIds) {
+    if (fields.memberIds || fields.leaderId) {
       const leaderId = fields.leaderId ?? oldLeaderId;
-      const allMemberIds: string[] = Array.from(new Set([...(leaderId ? [leaderId] : []), ...fields.memberIds]));
+      const baseMemberIds: string[] = fields.memberIds ?? oldMemberIds;
+      const allMemberIds: string[] = Array.from(new Set([...(leaderId ? [leaderId] : []), ...baseMemberIds]));
       fields.memberIds = allMemberIds;
       await removeMembersFromOtherCells(allMemberIds, cellId);
     }
