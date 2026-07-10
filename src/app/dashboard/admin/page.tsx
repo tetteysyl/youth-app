@@ -26,7 +26,7 @@ type Cell = {
 };
 
 export default function AdminPage() {
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const router = useRouter();
   const [pending, setPending] = useState<any[]>([]);
   const [allMembers, setAllMembers] = useState<any[]>([]);
@@ -137,6 +137,23 @@ export default function AdminPage() {
     if (SINGLETON_ROLES.includes(newRole)) {
       const holder = allMembers.find((m) => m.role === newRole && m.id !== uid);
       if (holder) {
+        // If the current user is the holder, offer a transfer instead of blocking
+        if (holder.id === user?.uid) {
+          const recipient = allMembers.find((m) => m.id === uid);
+          if (!confirm(
+            `Transfer the ${ROLE_LABELS[newRole]} role to ${recipient?.displayName}?\n\nYou will be demoted to Member and lose all ${ROLE_LABELS[newRole]} privileges immediately.`
+          )) return;
+          // Atomic transfer: elevate recipient, demote self
+          await Promise.all([
+            updateDoc(doc(db, "members", uid), { role: newRole }),
+            updateDoc(doc(db, "members", holder.id), { role: "member" }),
+          ]);
+          toast.success(`${ROLE_LABELS[newRole]} transferred to ${recipient?.displayName}.`);
+          // Update local user state and redirect (they've lost admin access)
+          setUser({ ...user!, role: "member" });
+          router.replace("/dashboard");
+          return;
+        }
         toast.error(`${holder.displayName} already holds the ${ROLE_LABELS[newRole]} role. Reassign them first.`);
         return;
       }

@@ -238,11 +238,12 @@ export default function MembersPage() {
     }
   };
 
-  const getCurrentMonthDues = (memberId: string) => {
+  const getCurrentMonthDues = (memberId: string): boolean | null => {
+    if (!(memberId in allDues)) return null; // still loading
     const year = new Date().getFullYear();
     const month = new Date().getMonth() + 1;
     const key = `${year}-${String(month).padStart(2, "0")}`;
-    return allDues[memberId]?.[key]?.paid ?? null;
+    return allDues[memberId]?.[key]?.paid ?? false; // loaded but no record = unpaid
   };
 
   const filtered = members.filter((m) =>
