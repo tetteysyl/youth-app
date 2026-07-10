@@ -5,6 +5,15 @@ import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 import { sendDuesPaidEmail } from "@/lib/email";
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DEFAULT_DUES_AMOUNT = 5;
+
+async function getDuesAmount(year: number): Promise<number> {
+  try {
+    const snap = await adminDb.collection("settings").doc("dues").get();
+    const yearData = snap.exists ? (snap.data() as any)?.[String(year)] : null;
+    return yearData?.amount ?? DEFAULT_DUES_AMOUNT;
+  } catch { return DEFAULT_DUES_AMOUNT; }
+}
 
 // GET /api/dues?memberId=xxx  — president, fin_sec, treasurer, or self
 export async function GET(req: NextRequest) {
@@ -19,7 +28,6 @@ export async function GET(req: NextRequest) {
 
   const snap = await adminDb.collection("dues").doc(memberId).get();
   const payments = snap.exists ? (snap.data()?.payments ?? {}) : {};
-  // Serialize Timestamps
   const serialized: Record<string, any> = {};
   for (const [key, val] of Object.entries(payments as Record<string, any>)) {
     serialized[key] = { ...val, paidAt: val.paidAt?.toMillis?.() ?? val.paidAt ?? null };
@@ -39,7 +47,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  // Validate months are 1-12
   const validMonths: number[] = months.filter((m) => Number.isInteger(m) && m >= 1 && m <= 12);
   if (validMonths.length === 0) return NextResponse.json({ error: "Invalid months" }, { status: 400 });
 
@@ -47,7 +54,6 @@ export async function POST(req: NextRequest) {
   const snap = await duesRef.get();
   const existing: Record<string, any> = snap.exists ? (snap.data()?.payments ?? {}) : {};
 
-  // Only process months not already paid
   const newMonths = validMonths.filter((m) => {
     const key = `${year}-${String(m).padStart(2, "0")}`;
     return !existing[key]?.paid;
@@ -57,22 +63,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "All selected months are already recorded" }, { status: 409 });
   }
 
-  const updates: Record<string, any> = {};
   const now = new Date();
-  for (const m of newMonths) {
-    const key = `${year}-${String(m).padStart(2, "0")}`;
-    updates[`payments.${key}`] = {
-      paid: true,
-      paidAt: FieldValue.serverTimestamp(),
-      markedBy: caller.uid,
-      markedByName: caller.displayName,
-    };
-  }
 
+  // Write dues payments
   if (snap.exists) {
+    const updates: Record<string, any> = {};
+    for (const m of newMonths) {
+      const key = `${year}-${String(m).padStart(2, "0")}`;
+      updates[`payments.${key}`] = { paid: true, paidAt: FieldValue.serverTimestamp(), markedBy: caller.uid, markedByName: caller.displayName };
+    }
     await duesRef.update(updates);
   } else {
-    // Build initial doc from flat update keys
     const payments: Record<string, any> = {};
     for (const m of newMonths) {
       const key = `${year}-${String(m).padStart(2, "0")}`;
@@ -81,13 +82,15 @@ export async function POST(req: NextRequest) {
     await duesRef.set({ payments });
   }
 
-  // Fetch member info for notification + email
-  const memberSnap = await adminDb.collection("members").doc(memberId).get();
+  // Get member info + dues amount in parallel
+  const [memberSnap, duesAmount] = await Promise.all([
+    adminDb.collection("members").doc(memberId).get(),
+    getDuesAmount(year),
+  ]);
   const memberData = memberSnap.data() as any;
   const memberEmail: string = memberData?.email ?? "";
   const memberName: string = memberData?.displayName ?? "Member";
 
-  // Build notification body
   const sorted = [...newMonths].sort((a, b) => a - b);
   let periodStr: string;
   if (sorted.length === 12) {
@@ -100,22 +103,39 @@ export async function POST(req: NextRequest) {
     periodStr = `${names.join(", ")} and ${last} ${year}`;
   }
 
-  // In-app notification
-  await adminDb.collection("notifications").add({
-    userId: memberId,
-    title: "Dues Payment Recorded",
-    body: `Your dues for ${periodStr} have been recorded as paid.`,
-    type: "dues",
-    read: false,
-    createdAt: now,
-  });
+  const totalAmount = duesAmount * newMonths.length;
+  const todayStr = now.toISOString().split("T")[0];
+
+  // Record financial transaction + in-app notification in parallel
+  await Promise.all([
+    // Auto-record to guild financials
+    adminDb.collection("transactions").add({
+      type: "income",
+      amount: totalAmount,
+      description: `Dues — ${memberName} (${sorted.length === 12 ? `Annual ${year}` : sorted.map((m) => MONTH_NAMES[m - 1]).join(", ") + ` ${year}`})`,
+      date: todayStr,
+      category: "Dues",
+      recordedBy: caller.displayName,
+      memberId,
+      memberName,
+      createdAt: FieldValue.serverTimestamp(),
+    }),
+    // In-app notification
+    adminDb.collection("notifications").add({
+      userId: memberId,
+      title: "Dues Payment Recorded",
+      body: `Your dues for ${periodStr} have been recorded as paid.`,
+      type: "dues",
+      read: false,
+      createdAt: now,
+    }),
+  ]);
 
   // Email (best-effort)
   if (memberEmail) {
-    try {
-      await sendDuesPaidEmail(memberEmail, memberName, newMonths, year);
-    } catch (e) { console.error("Dues paid email failed:", e); }
+    try { await sendDuesPaidEmail(memberEmail, memberName, newMonths, year); }
+    catch (e) { console.error("Dues paid email failed:", e); }
   }
 
-  return NextResponse.json({ ok: true, recorded: newMonths.length });
+  return NextResponse.json({ ok: true, recorded: newMonths.length, amount: totalAmount });
 }

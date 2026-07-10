@@ -55,9 +55,10 @@ export default function DashboardPage() {
   const load = useCallback((isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     staleWhileRevalidate("/api/dashboard", 30_000, (json, fromCache) => {
-      if (!json.error) {
+      if (!json?.error) {
         setData(json);
         setLoading(false);
+        if (fromCache && isRefresh) setRefreshing(true); // keep spinner until fresh data arrives
         if (!fromCache) {
           setRefreshing(false);
           if (isRefresh) setKey((k) => k + 1);
@@ -68,9 +69,9 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Load member's own dues (non-executives only — executives see dues on members page)
+  // Load current user's own dues — everyone pays dues, load in parallel with dashboard
   useEffect(() => {
-    if (!user || can.viewDuesStatus(user.role)) return;
+    if (!user) return;
     authFetch(`/api/dues?memberId=${user.uid}`)
       .then((r) => r.json())
       .then((d) => { if (d && !d.error) setDues(d); })
@@ -201,8 +202,8 @@ export default function DashboardPage() {
             ))}
       </div>
 
-      {/* My Dues — shown to regular members only */}
-      {dues !== null && user && !can.viewDuesStatus(user.role) && (() => {
+      {/* My Dues — shown to all members */}
+      {dues !== null && user && (() => {
         const year = new Date().getFullYear();
         return (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5" style={{ animation: "fadeUp 0.35s ease 0.15s both" }}>

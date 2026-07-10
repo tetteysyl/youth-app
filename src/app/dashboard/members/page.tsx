@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import { useRouter } from "next/navigation";
-import { Users, Search, UserMinus, X, Mail, CheckCircle2 } from "lucide-react";
+import { Users, Search, UserMinus, X, Mail, CheckCircle2, Settings2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -13,7 +13,7 @@ const MONTH_NAMES_FULL = ["January","February","March","April","May","June","Jul
 
 type DuesPayments = Record<string, { paid: boolean; paidAt: number | null; markedByName: string }>;
 
-function DuesModal({ member, onClose, onSaved }: { member: any; onClose: () => void; onSaved: () => void }) {
+function DuesModal({ member, onClose, onSaved, duesAmount }: { member: any; onClose: () => void; onSaved: () => void; duesAmount: number }) {
   const year = new Date().getFullYear();
   const [payments, setPayments] = useState<DuesPayments>({});
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -75,7 +75,7 @@ function DuesModal({ member, onClose, onSaved }: { member: any; onClose: () => v
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div>
             <p className="font-semibold text-gray-800">{member.displayName}</p>
-            <p className="text-xs text-gray-400">Dues — {year}</p>
+            <p className="text-xs text-gray-400">Dues — {year} · GH₵{duesAmount}/month</p>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
         </div>
@@ -119,7 +119,8 @@ function DuesModal({ member, onClose, onSaved }: { member: any; onClose: () => v
 
               {selected.size > 0 && (
                 <div className="mt-3 p-3 bg-purple-50 rounded-lg text-xs text-purple-700">
-                  Marking: {Array.from(selected).sort((a, b) => a - b).map((m) => MONTH_NAMES_FULL[m - 1]).join(", ")}
+                  <span className="font-medium">Marking:</span> {Array.from(selected).sort((a, b) => a - b).map((m) => MONTH_NAMES_FULL[m - 1]).join(", ")}
+                  <br /><span className="font-medium">Total: GH₵{duesAmount * selected.size}</span>
                 </div>
               )}
             </>
@@ -151,6 +152,10 @@ export default function MembersPage() {
   const [duesMember, setDuesMember] = useState<any | null>(null);
   const [allDues, setAllDues] = useState<Record<string, DuesPayments>>({});
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [duesAmount, setDuesAmount] = useState(5);
+  const [showSetDues, setShowSetDues] = useState(false);
+  const [newDuesAmount, setNewDuesAmount] = useState("");
+  const [savingDuesAmount, setSavingDuesAmount] = useState(false);
   const duesLoadedRef = useRef(false);
 
   const isPresident = user?.role === "president";
@@ -167,6 +172,12 @@ export default function MembersPage() {
   useEffect(() => {
     if (!user || !can.viewAllMembers(user.role)) { router.replace("/dashboard"); return; }
     load();
+    // Load dues amount for current year
+    const year = new Date().getFullYear();
+    authFetch(`/api/dues/settings?year=${year}`)
+      .then((r) => r.json())
+      .then((d) => { if (d?.amount) setDuesAmount(d.amount); })
+      .catch(() => {});
   }, [user]);
 
   // Load dues summary for president view (once members load)
@@ -210,6 +221,29 @@ export default function MembersPage() {
     }
   };
 
+  const saveDuesAmount = async () => {
+    const amt = parseFloat(newDuesAmount);
+    if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return; }
+    setSavingDuesAmount(true);
+    try {
+      const year = new Date().getFullYear();
+      const res = await authFetch("/api/dues/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year, amount: amt }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      setDuesAmount(amt);
+      setShowSetDues(false);
+      setNewDuesAmount("");
+      toast.success(`Dues set to GH₵${amt}/month for ${year}`);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update dues amount");
+    } finally {
+      setSavingDuesAmount(false);
+    }
+  };
+
   const sendReminder = async () => {
     if (!confirm("Send a dues reminder email to all members who haven't paid this month?")) return;
     setSendingReminder(true);
@@ -244,19 +278,60 @@ export default function MembersPage() {
           <h1 className="text-2xl font-bold text-gray-800">Members</h1>
           <p className="text-gray-500 text-sm">All active guild members</p>
         </div>
-        {user && can.sendDuesReminder(user.role) && (
-          <button
-            onClick={sendReminder}
-            disabled={sendingReminder}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#3b1f6e] text-[#3b1f6e] text-xs font-medium hover:bg-purple-50 transition-colors disabled:opacity-50 shrink-0"
-          >
-            {sendingReminder
-              ? <div className="w-3.5 h-3.5 border-2 border-[#3b1f6e] border-t-transparent rounded-full animate-spin" />
-              : <Mail size={14} />}
-            Dues Reminder
-          </button>
-        )}
+        <div className="flex gap-2 shrink-0">
+          {user && can.manageDues(user.role) && (
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-600">
+              <span>GH₵{duesAmount}/mo</span>
+              {user.role === "treasurer" && (
+                <button onClick={() => { setNewDuesAmount(String(duesAmount)); setShowSetDues(true); }} className="text-[#3b1f6e] hover:underline ml-1">
+                  <Settings2 size={13} />
+                </button>
+              )}
+            </div>
+          )}
+          {user && can.sendDuesReminder(user.role) && (
+            <button
+              onClick={sendReminder}
+              disabled={sendingReminder}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#3b1f6e] text-[#3b1f6e] text-xs font-medium hover:bg-purple-50 transition-colors disabled:opacity-50"
+            >
+              {sendingReminder
+                ? <div className="w-3.5 h-3.5 border-2 border-[#3b1f6e] border-t-transparent rounded-full animate-spin" />
+                : <Mail size={14} />}
+              Remind
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Set dues amount modal */}
+      {showSetDues && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4 sm:pb-0" onClick={() => setShowSetDues(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-xs shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="font-semibold text-gray-800 mb-1">Set Dues Amount</p>
+            <p className="text-xs text-gray-400 mb-4">Monthly dues for {new Date().getFullYear()}</p>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-sm text-gray-500">GH₵</span>
+              <input
+                type="number"
+                min="1"
+                step="0.5"
+                value={newDuesAmount}
+                onChange={(e) => setNewDuesAmount(e.target.value)}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e]"
+                placeholder="5"
+              />
+              <span className="text-xs text-gray-400">/ month</span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowSetDues(false)} className="flex-1 border border-gray-200 py-2 rounded-xl text-sm text-gray-600">Cancel</button>
+              <button onClick={saveDuesAmount} disabled={savingDuesAmount} className="flex-1 bg-[#3b1f6e] text-white py-2 rounded-xl text-sm disabled:opacity-50">
+                {savingDuesAmount ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -347,6 +422,7 @@ export default function MembersPage() {
       {duesMember && (
         <DuesModal
           member={duesMember}
+          duesAmount={duesAmount}
           onClose={() => setDuesMember(null)}
           onSaved={() => {
             duesLoadedRef.current = false;
