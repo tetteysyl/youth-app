@@ -1,5 +1,6 @@
 ﻿"use client";
 import { authFetch } from "@/lib/auth-fetch";
+import { staleWhileRevalidate } from "@/lib/cache";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
@@ -36,17 +37,13 @@ export default function AttendanceIndexPage() {
       return;
     }
 
-    Promise.all([
-      authFetch("/api/meetings").then((r) => r.json()),
-      authFetch("/api/get-members").then((r) => r.json()),
-    ])
-      .then(([m, mb]) => {
-        if (Array.isArray(m)) setMeetings(m);
-        else setError(m.error || "Failed to load meetings");
-        if (Array.isArray(mb)) setMembers(mb);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    staleWhileRevalidate("/api/meetings", 30_000, (m) => {
+      if (Array.isArray(m)) { setMeetings(m); setLoading(false); }
+      else setError(m.error || "Failed to load meetings");
+    });
+    staleWhileRevalidate("/api/get-members", 30_000, (mb) => {
+      if (Array.isArray(mb)) setMembers(mb);
+    });
   }, [user, router]);
 
   const statusColor: Record<string, string> = {

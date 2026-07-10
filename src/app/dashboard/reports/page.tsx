@@ -1,5 +1,6 @@
 ﻿"use client";
 import { authFetch } from "@/lib/auth-fetch";
+import { staleWhileRevalidate, invalidate } from "@/lib/cache";
 import { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
@@ -34,12 +35,12 @@ export default function ReportsPage() {
   const canApprove = user && can.approveReport(user.role);
   const canPublishDirectly = user && can.publishReport(user.role);
 
-  const load = async () => {
+  const load = (fresh = false) => {
+    if (fresh) invalidate("/api/reports");
     setLoading(true);
-    const res = await authFetch("/api/reports");
-    const data = await res.json();
-    if (Array.isArray(data)) setReports(data);
-    setLoading(false);
+    staleWhileRevalidate("/api/reports", 20_000, (data) => {
+      if (Array.isArray(data)) { setReports(data); setLoading(false); }
+    });
   };
 
   useEffect(() => { load(); }, []);
@@ -86,7 +87,7 @@ export default function ReportsPage() {
       if (!res.ok) throw new Error((await res.json()).error || "Failed to submit report");
       toast.success(canPublishDirectly ? "Report published!" : "Submitted for approval!");
       resetForm();
-      load();
+      load(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to publish report.");
     } finally {
@@ -116,7 +117,7 @@ export default function ReportsPage() {
       });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success("Report approved and published!");
-      load();
+      load(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to approve.");
     } finally {
@@ -135,7 +136,7 @@ export default function ReportsPage() {
       });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success("Draft rejected.");
-      load();
+      load(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to reject.");
     } finally {

@@ -30,14 +30,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (_membersCache && Date.now() - _membersCache.ts < MEMBERS_TTL) {
-      return NextResponse.json(_membersCache.data, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json(_membersCache.data, { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" } });
     }
     const snap = await adminDb.collection("members").get();
     const members = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((m: any) => m.role !== "pending" && m.role !== "rejected");
     _membersCache = { data: members, ts: Date.now() };
-    return NextResponse.json(members, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(members, { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" } });
   } catch (err: any) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

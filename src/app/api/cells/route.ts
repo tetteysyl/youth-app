@@ -62,19 +62,19 @@ export async function GET(req: NextRequest) {
       // Per-user query — not cached, but bounded and fast (indexed)
       const snap = await adminDb.collection("cells").where("memberIds", "array-contains", userId).get();
       const cells = snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }));
-      return NextResponse.json(cells, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json(cells, { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" } });
     }
 
     // All-cells view: serve from cache, prune/seed only when cache is cold
     if (_allCellsCache && Date.now() - _allCellsCache.ts < CELLS_TTL) {
-      return NextResponse.json(_allCellsCache.data, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json(_allCellsCache.data, { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" } });
     }
     await ensureDefaultCells();
     const allSnap = await adminDb.collection("cells").get();
     await pruneDeletedMembers(allSnap.docs);
     const cells = allSnap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }));
     _allCellsCache = { data: cells, ts: Date.now() };
-    return NextResponse.json(cells, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(cells, { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" } });
   } catch (err: any) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

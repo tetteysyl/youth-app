@@ -1,5 +1,6 @@
 ﻿"use client";
 import { authFetch } from "@/lib/auth-fetch";
+import { staleWhileRevalidate } from "@/lib/cache";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "@/lib/store";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
@@ -48,39 +49,24 @@ export default function MessagesPage() {
   const [profileSheet, setProfileSheet] = useState<{ type: "member"; member: Member } | { type: "cell"; cell: Cell } | null>(null);
   const [pendingConv, setPendingConv] = useState<{ convId?: string; cellId?: string; group?: boolean } | null>(null);
 
-  // Load members via Admin SDK API
+  // Load members + cells using stale-while-revalidate so navigation feels instant
   useEffect(() => {
     if (!user) return;
-    authFetch("/api/get-members")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setMembers(data.filter((m: Member) => m.id !== user.uid));
-        }
-      })
-      .catch(console.error);
+    staleWhileRevalidate("/api/get-members", 30_000, (data) => {
+      if (Array.isArray(data)) setMembers(data.filter((m: Member) => m.id !== user.uid));
+    });
+    staleWhileRevalidate(`/api/cells?userId=${user.uid}`, 30_000, (data) => {
+      if (Array.isArray(data)) setCells(data);
+    });
   }, [user]);
 
-  // Load user's cells
+  // Poll inbox summary every 15s; serve from cache immediately then revalidate
   useEffect(() => {
     if (!user) return;
-    authFetch(`/api/cells?userId=${user.uid}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setCells(data);
-      })
-      .catch(console.error);
-  }, [user]);
-
-  // Poll inbox summary (unread counts + last message times) every 5s
-  useEffect(() => {
-    if (!user) return;
-    const fetchInbox = () => {
-      authFetch(`/api/messages?inbox=${user.uid}`)
-        .then((r) => r.json())
-        .then((data) => { if (data && typeof data === "object") setInboxSummary(data); })
-        .catch(() => {});
-    };
+    const fetchInbox = () =>
+      staleWhileRevalidate(`/api/messages?inbox=${user.uid}`, 12_000, (data) => {
+        if (data && typeof data === "object" && !data.error) setInboxSummary(data);
+      });
     fetchInbox();
     inboxPollRef.current = setInterval(fetchInbox, 15000);
     return () => { if (inboxPollRef.current) clearInterval(inboxPollRef.current); };

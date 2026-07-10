@@ -1,5 +1,6 @@
 ﻿"use client";
 import { authFetch } from "@/lib/auth-fetch";
+import { staleWhileRevalidate, invalidate } from "@/lib/cache";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
@@ -16,10 +17,11 @@ export default function MembersPage() {
 
   const isPresident = user?.role === "president";
 
-  const load = async () => {
-    const res = await authFetch("/api/admin/members", { cache: "no-store" });
-    const data = await res.json();
-    if (Array.isArray(data)) setMembers(data);
+  const load = (fresh = false) => {
+    if (fresh) invalidate("/api/admin/members");
+    staleWhileRevalidate("/api/admin/members", 30_000, (data) => {
+      if (Array.isArray(data)) setMembers(data);
+    });
   };
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function MembersPage() {
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed");
       toast.success(`${name} has been removed.`);
-      load();
+      load(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to remove member.");
     } finally {
