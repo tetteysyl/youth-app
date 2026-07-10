@@ -111,12 +111,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     markRead(n.id); // fire-and-forget, don't await
     setShowNotifs(false);
     if (n.type === "message") {
-      // Store target in sessionStorage so messages page can open the right chat
-      // even if we're already on that page (no remount occurs)
-      if (n.notifConvId) sessionStorage.setItem("openConv", JSON.stringify({ convId: n.notifConvId }));
-      else if (n.notifCellId) sessionStorage.setItem("openConv", JSON.stringify({ cellId: n.notifCellId }));
-      else if (n.notifGroup) sessionStorage.setItem("openConv", JSON.stringify({ group: true }));
-      else sessionStorage.setItem("openConv", JSON.stringify({ group: true }));
+      const target =
+        n.notifConvId ? { convId: n.notifConvId } :
+        n.notifCellId ? { cellId: n.notifCellId } :
+        { group: true };
+      // Write sessionStorage for cross-page navigation (page not yet mounted)
+      sessionStorage.setItem("openConv", JSON.stringify(target));
+      // Dispatch CustomEvent for same-page case (messages page already mounted, no remount on push)
+      window.dispatchEvent(new CustomEvent("openConv", { detail: target }));
       router.push("/dashboard/messages");
     }
   };

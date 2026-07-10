@@ -46,6 +46,7 @@ export default function MessagesPage() {
   const cellPhotoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingCellPhoto, setUploadingCellPhoto] = useState(false);
   const [profileSheet, setProfileSheet] = useState<{ type: "member"; member: Member } | { type: "cell"; cell: Cell } | null>(null);
+  const [pendingConv, setPendingConv] = useState<{ convId?: string; cellId?: string; group?: boolean } | null>(null);
 
   // Load members via Admin SDK API
   useEffect(() => {
@@ -207,26 +208,44 @@ export default function MessagesPage() {
     setView("chat");
   };
 
-  // Auto-open a conversation when navigated from a notification (target stored in sessionStorage)
+  // Read sessionStorage on mount (cross-page navigation from notification)
   useEffect(() => {
-    if (!user || members.length === 0) return;
     const raw = sessionStorage.getItem("openConv");
     if (!raw) return;
     try {
-      const target = JSON.parse(raw);
-      sessionStorage.removeItem("openConv"); // consume immediately
-      if (target.convId) {
-        const peerId = (target.convId as string).split("__").find((id: string) => id !== user.uid);
-        const member = members.find((m) => m.id === peerId);
-        if (member) openDirect(member);
-      } else if (target.cellId) {
-        const cell = cells.find((c) => c.id === target.cellId);
-        if (cell) openCellChat(cell);
-      } else if (target.group) {
-        openGroup();
-      }
-    } catch { sessionStorage.removeItem("openConv"); }
-  }, [members, cells, user]);
+      setPendingConv(JSON.parse(raw));
+    } catch {}
+    sessionStorage.removeItem("openConv");
+  }, []);
+
+  // Listen for same-page notification clicks via CustomEvent (user already on /messages)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      sessionStorage.removeItem("openConv");
+      setPendingConv((e as CustomEvent<{ convId?: string; cellId?: string; group?: boolean }>).detail);
+    };
+    window.addEventListener("openConv", handler);
+    return () => window.removeEventListener("openConv", handler);
+  }, []);
+
+  // Process pending navigation once members (and optionally cells) are loaded
+  useEffect(() => {
+    if (!pendingConv || !user || members.length === 0) return;
+    const target = pendingConv;
+    setPendingConv(null);
+    if (target.convId) {
+      const peerId = target.convId.split("__").find((id: string) => id !== user.uid);
+      const member = members.find((m) => m.id === peerId);
+      if (member) openDirect(member);
+    } else if (target.cellId) {
+      const cell = cells.find((c) => c.id === target.cellId);
+      if (cell) openCellChat(cell);
+      // If cell not loaded yet, wait — cells effect will re-trigger when they arrive
+      else if (cells.length === 0) setPendingConv(target);
+    } else if (target.group) {
+      openGroup();
+    }
+  }, [pendingConv, members, cells, user]);
 
   const filteredMembers = members.filter((m) =>
     m.displayName?.toLowerCase().includes(search.toLowerCase())
