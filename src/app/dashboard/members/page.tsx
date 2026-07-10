@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import { useRouter } from "next/navigation";
-import { Users, Search, UserMinus, X, Mail, CheckCircle2, Settings2 } from "lucide-react";
+import { Users, Search, X, Mail, CheckCircle2, Settings2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -148,7 +148,6 @@ export default function MembersPage() {
   const router = useRouter();
   const [members, setMembers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [removing, setRemoving] = useState<string | null>(null);
   const [duesMember, setDuesMember] = useState<any | null>(null);
   const [allDues, setAllDues] = useState<Record<string, DuesPayments>>({});
   const [sendingReminder, setSendingReminder] = useState(false);
@@ -158,7 +157,6 @@ export default function MembersPage() {
   const [savingDuesAmount, setSavingDuesAmount] = useState(false);
   const duesLoadedRef = useRef(false);
 
-  const isPresident = user?.role === "president";
   const canManageDues = user ? can.manageDues(user.role) : false;
   const canViewDues = user ? can.viewDuesStatus(user.role) : false;
 
@@ -201,25 +199,6 @@ export default function MembersPage() {
       setAllDues(map);
     });
   }, [members, canViewDues]);
-
-  const removeMember = async (uid: string, name: string) => {
-    if (!confirm(`Remove ${name} from YPG entirely? This permanently deletes their account.`)) return;
-    setRemoving(uid);
-    try {
-      const res = await authFetch("/api/admin/members", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed");
-      toast.success(`${name} has been removed.`);
-      load(true);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to remove member.");
-    } finally {
-      setRemoving(null);
-    }
-  };
 
   const saveDuesAmount = async () => {
     const amt = parseFloat(newDuesAmount);
@@ -398,19 +377,6 @@ export default function MembersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       <circle cx="12" cy="12" r="10" />
                     </svg>
-                  </button>
-                )}
-                {isPresident && m.id !== user?.uid && (
-                  <button
-                    onClick={() => removeMember(m.id, m.displayName)}
-                    disabled={removing === m.id}
-                    title="Remove member"
-                    className="p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
-                  >
-                    {removing === m.id
-                      ? <div className="w-4 h-4 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
-                      : <UserMinus size={16} />
-                    }
                   </button>
                 )}
               </div>
