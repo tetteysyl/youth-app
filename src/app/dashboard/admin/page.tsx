@@ -361,9 +361,10 @@ export default function AdminPage() {
               >
                 {ALL_ROLES.map((r) => {
                   const takenBy = roleTakenBy(r, m.id);
+                  const takenBySelf = takenBy?.id === user?.uid;
                   return (
-                    <option key={r} value={r} disabled={!!takenBy}>
-                      {takenBy ? "🔒 " : ""}{ROLE_LABELS[r]}
+                    <option key={r} value={r} disabled={!!takenBy && !takenBySelf}>
+                      {takenBy && !takenBySelf ? "🔒 " : takenBySelf ? "⇄ Transfer " : ""}{ROLE_LABELS[r]}
                     </option>
                   );
                 })}
