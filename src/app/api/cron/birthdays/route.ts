@@ -4,8 +4,8 @@ import { getAuth } from "firebase-admin/auth";
 import { sendBirthdayEmail, sendYafTransitionEmail, sendYafRemovalWarningEmail } from "@/lib/email";
 import { format } from "date-fns";
 
-const YAF_GRACE_PERIOD_MS = 60 * 24 * 60 * 60 * 1000; // 2 months (60 days)
-const WARNING_THRESHOLD_MS = 57 * 24 * 60 * 60 * 1000; // warn 3 days before removal
+const YAF_GRACE_PERIOD_MS = 366 * 24 * 60 * 60 * 1000; // 1 year (366 days)
+const WARNING_THRESHOLD_MS = 336 * 24 * 60 * 60 * 1000; // warn 30 days before removal (day 336)
 
 function calcAge(dob: string, today: Date): number {
   const birth = new Date(dob);
@@ -66,13 +66,13 @@ export async function GET(req: NextRequest) {
           continue; // skip further processing for this now-deleted member
         }
 
-        // 3-day pre-removal warning (sent once)
+        // 30-day pre-removal warning (sent once)
         if (elapsed >= WARNING_THRESHOLD_MS && !data.removalWarningSent) {
           const removalDate = format(new Date(startedAt + YAF_GRACE_PERIOD_MS), "MMMM d, yyyy");
           await adminDb.collection("notifications").add({
             userId: doc.id,
-            title: "⏳ Account closing in 3 days",
-            body: `Your YPG account will be automatically closed on ${removalDate}.`,
+            title: "⏳ Account closing in 30 days",
+            body: `Your YPG account will be automatically closed on ${removalDate}. Please make any necessary arrangements.`,
             type: "broadcast",
             read: false,
             createdAt: now,
@@ -105,11 +105,11 @@ export async function GET(req: NextRequest) {
         }
         birthdaysSent++;
       } else if (age === 30 && !data.isYaf) {
-        // Turning 30 today — becomes a YAF member, starts the 2-month countdown
+        // Turning 30 today — becomes a YAF member, starts the 1-year countdown
         await adminDb.collection("notifications").add({
           userId: doc.id,
           title: "🎉 Congratulations on becoming a YAF member!",
-          body: "Thank you for being part of YPG. We celebrate you today and always.",
+          body: "You have officially transitioned to YAF (Young Adult Fellowship). You have 1 year remaining in the YPG system. Thank you for your service to the Guild!",
           type: "broadcast",
           read: false,
           createdAt: now,
@@ -119,6 +119,19 @@ export async function GET(req: NextRequest) {
         }
         await doc.ref.update({ isYaf: true, yafStartedAt: now });
         yafTransitions++;
+
+        // Notify the president
+        const presidentSnap = await adminDb.collection("members").where("role", "==", "president").limit(1).get();
+        if (!presidentSnap.empty) {
+          await adminDb.collection("notifications").add({
+            userId: presidentSnap.docs[0].id,
+            title: "🎓 Member ready to graduate to YAF",
+            body: `${data.displayName || "A member"} has turned 30 and is ready to graduate to YAF (Young Adult Fellowship).`,
+            type: "broadcast",
+            read: false,
+            createdAt: now,
+          });
+        }
       }
     }
 

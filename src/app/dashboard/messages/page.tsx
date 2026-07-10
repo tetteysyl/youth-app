@@ -99,12 +99,16 @@ export default function MessagesPage() {
     }
     try {
       const res = await authFetch(url);
+      if (!res.ok) {
+        console.error("fetchMessages failed:", res.status);
+        return;
+      }
       const data = await res.json();
       if (Array.isArray(data)) {
         setMessages(data);
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("fetchMessages error:", e); }
   }, [activeChat, user]);
 
   useEffect(() => {

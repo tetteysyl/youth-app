@@ -112,6 +112,7 @@ export async function sendYafTransitionEmail(memberEmail: string, memberName: st
           <p>Dear <strong>${memberName}</strong>,</p>
           <p>Congratulations on turning 30 and becoming a <strong>Young Adult Fellowship (YAF)</strong> member! Thank you for being a faithful member of the Young People's Guild for these past years.</p>
           <p>We deeply appreciate all the contributions, energy, and love you have brought to the Guild. As you transition into YAF, please know that you will always be part of our family in Christ.</p>
+          <p><strong>You have 1 year remaining in the YPG system.</strong> Your account will be automatically closed after this period. We encourage you to make the most of your remaining time with us.</p>
           <p>We pray God's continued blessings over the next chapter of your life and ministry.</p>
           <p style="margin-top: 20px; font-style: italic; color: #666;">"To Know His Will and To Do It"</p>
           <p>With gratitude,<br/><strong>YPG Executives</strong></p>
@@ -133,7 +134,7 @@ export async function sendYafRemovalWarningEmail(memberEmail: string, memberName
         </div>
         <div style="padding: 30px; background: #f9f9f9;">
           <p>Dear <strong>${memberName}</strong>,</p>
-          <p>This is a friendly reminder that as a YAF (Young Adult Fellowship) member, your YPG account is scheduled to be automatically closed in <strong>3 days</strong>, on <strong>${removalDate}</strong>.</p>
+          <p>This is a friendly reminder that as a YAF (Young Adult Fellowship) member, your YPG account is scheduled to be automatically closed in <strong>30 days</strong>, on <strong>${removalDate}</strong>.</p>
           <p>If you believe this is a mistake, please reach out to the YPG executives as soon as possible.</p>
           <p>Thank you once again for your years of dedicated service and contribution to the Guild. We pray God's blessings over your continued walk with Him.</p>
           <p style="margin-top: 20px; font-style: italic; color: #666;">"To Know His Will and To Do It"</p>

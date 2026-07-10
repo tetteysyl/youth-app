@@ -15,13 +15,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "YPG — Presbyterian Church of Ghana",
-  description: "Young People's Guild Management System — Saviour Congregation",
+  title: "Saviour YPG",
+  description: "Young People's Guild — PCG Saviour Congregation, Madina-West",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "YPG PCG",
+    title: "Saviour YPG",
     startupImage: "/apple-touch-icon.png",
   },
   icons: {

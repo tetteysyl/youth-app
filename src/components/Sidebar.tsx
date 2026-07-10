@@ -60,12 +60,12 @@ export default function Sidebar({ open, onClose, unreadMessages = 0 }: SidebarPr
         <div className="p-4 border-b border-white/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-white/10 border border-[#c9a52a] overflow-hidden flex items-center justify-center p-0.5">
-                <Image src="/ypg-logo.png" alt="YPG" width={36} height={36} className="object-contain" />
+              <div className="w-10 h-10 rounded-full border border-[#c9a52a] overflow-hidden shrink-0">
+                <Image src="/ypg-logo.png" alt="YPG" width={40} height={40} className="w-full h-full object-cover" />
               </div>
               <div>
                 <p className="text-[#f0c940] font-bold text-sm leading-tight">YPG</p>
-                <p className="text-white/50 text-xs leading-tight">PCG — Saviour</p>
+                <p className="text-white/50 text-xs leading-tight">SAVIOUR CONGREGATION</p>
               </div>
             </div>
             <button onClick={onClose} className="lg:hidden text-white/40 hover:text-white">
@@ -78,9 +78,12 @@ export default function Sidebar({ open, onClose, unreadMessages = 0 }: SidebarPr
         {user && (
           <div className="p-4 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[#3b1f6e] text-sm shrink-0"
+              <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center font-bold text-[#3b1f6e] text-sm shrink-0"
                 style={{ background: "linear-gradient(135deg, #f0c940, #c9a52a)" }}>
-                {user.displayName?.charAt(0).toUpperCase()}
+                {user.photoURL
+                  ? <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                  : user.displayName?.charAt(0).toUpperCase()
+                }
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white text-sm font-medium truncate">{user.displayName}</p>

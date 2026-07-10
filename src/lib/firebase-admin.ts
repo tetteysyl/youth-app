@@ -2,6 +2,7 @@ import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
+import { getStorage } from "firebase-admin/storage";
 
 export function getAdminApp(): App {
   if (getApps().length > 0) return getApps()[0];
@@ -31,5 +32,11 @@ export const adminAuth = new Proxy({} as ReturnType<typeof getAuth>, {
 export const adminMessaging = new Proxy({} as ReturnType<typeof getMessaging>, {
   get(_, prop) {
     return (getMessaging(getAdminApp()) as any)[prop];
+  },
+});
+
+export const adminStorage = new Proxy({} as ReturnType<typeof getStorage>, {
+  get(_, prop) {
+    return (getStorage(getAdminApp()) as any)[prop];
   },
 });
