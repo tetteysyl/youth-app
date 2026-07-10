@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-type Notif = { id: string; title: string; body: string; type: string; read: boolean; createdAt: any };
+type Notif = { id: string; title: string; body: string; type: string; read: boolean; createdAt: any; meta?: { convId?: string; senderId?: string; cellId?: string; group?: boolean } };
 
 const TYPE_ICON: Record<string, string> = {
   meeting: "📅",
@@ -107,6 +107,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     await updateDoc(doc(db, "notifications", id), { read: true });
   };
 
+  const handleNotifClick = async (n: Notif) => {
+    await markRead(n.id);
+    setShowNotifs(false);
+    if (n.type === "message" && n.meta) {
+      if (n.meta.convId) router.push(`/dashboard/messages?convId=${n.meta.convId}`);
+      else if (n.meta.cellId) router.push(`/dashboard/messages?cellId=${n.meta.cellId}`);
+      else if (n.meta.group) router.push(`/dashboard/messages?group=1`);
+      else router.push("/dashboard/messages");
+    }
+  };
+
   const formatTime = (ts: any) => {
     if (!ts) return "";
     const date = ts.toDate?.() ?? (ts instanceof Date ? ts : null);
@@ -180,7 +191,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   {notifications.slice(0, 20).map((n) => (
                     <div
                       key={n.id}
-                      onClick={() => markRead(n.id)}
+                      onClick={() => handleNotifClick(n)}
                       className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${!n.read ? "bg-purple-50" : ""}`}
                     >
                       <div className="flex gap-2.5">

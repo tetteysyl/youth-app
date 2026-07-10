@@ -1,6 +1,7 @@
 ﻿"use client";
 import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import { Send, Users, User, Plus, ArrowLeft, Search, Camera } from "lucide-react";
@@ -21,6 +22,7 @@ function getConversationId(uid1: string, uid2: string) {
 
 export default function MessagesPage() {
   const { user } = useAuthStore();
+  const searchParams = useSearchParams();
   const [members, setMembers] = useState<Member[]>([]);
   const [cells, setCells] = useState<Cell[]>([]);
   const [view, setView] = useState<"inbox" | "chat">("inbox");
@@ -205,6 +207,25 @@ export default function MessagesPage() {
     setActiveChat({ type: "cell", peerName: cell.name, cellId: cell.id, peerPhotoURL: cell.photoURL });
     setView("chat");
   };
+
+  // Auto-open a conversation when navigated from a notification link
+  const autoOpenDone = useRef(false);
+  useEffect(() => {
+    if (autoOpenDone.current || !user || members.length === 0) return;
+    const convId = searchParams.get("convId");
+    const cellId = searchParams.get("cellId");
+    const group = searchParams.get("group");
+    if (convId) {
+      const peerId = convId.split("__").find((id) => id !== user.uid);
+      const member = members.find((m) => m.id === peerId);
+      if (member) { autoOpenDone.current = true; openDirect(member); }
+    } else if (cellId) {
+      const cell = cells.find((c) => c.id === cellId);
+      if (cell) { autoOpenDone.current = true; openCellChat(cell); }
+    } else if (group) {
+      autoOpenDone.current = true; openGroup();
+    }
+  }, [members, cells, user, searchParams]);
 
   const filteredMembers = members.filter((m) =>
     m.displayName?.toLowerCase().includes(search.toLowerCase())
