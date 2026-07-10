@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-type Notif = { id: string; title: string; body: string; type: string; read: boolean; createdAt: any; meta?: { convId?: string; senderId?: string; cellId?: string; group?: boolean } };
+type Notif = { id: string; title: string; body: string; type: string; read: boolean; createdAt: any; notifConvId?: string; notifCellId?: string; notifGroup?: boolean };
 
 const TYPE_ICON: Record<string, string> = {
   meeting: "📅",
@@ -108,13 +108,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const handleNotifClick = async (n: Notif) => {
-    await markRead(n.id);
+    markRead(n.id); // fire-and-forget, don't await
     setShowNotifs(false);
-    if (n.type === "message" && n.meta) {
-      if (n.meta.convId) router.push(`/dashboard/messages?convId=${n.meta.convId}`);
-      else if (n.meta.cellId) router.push(`/dashboard/messages?cellId=${n.meta.cellId}`);
-      else if (n.meta.group) router.push(`/dashboard/messages?group=1`);
-      else router.push("/dashboard/messages");
+    if (n.type === "message") {
+      // Store target in sessionStorage so messages page can open the right chat
+      // even if we're already on that page (no remount occurs)
+      if (n.notifConvId) sessionStorage.setItem("openConv", JSON.stringify({ convId: n.notifConvId }));
+      else if (n.notifCellId) sessionStorage.setItem("openConv", JSON.stringify({ cellId: n.notifCellId }));
+      else if (n.notifGroup) sessionStorage.setItem("openConv", JSON.stringify({ group: true }));
+      else sessionStorage.setItem("openConv", JSON.stringify({ group: true }));
+      router.push("/dashboard/messages");
     }
   };
 

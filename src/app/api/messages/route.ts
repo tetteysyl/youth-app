@@ -142,12 +142,13 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const preview = safeContent.length > 60 ? safeContent.slice(0, 60) + "…" : safeContent;
 
+    // Top-level fields (not nested) avoid Firestore composite index requirements
     if (type === "direct" && recipientId) {
       await adminDb.collection("notifications").add({
         userId: recipientId,
         title: `New message from ${caller.displayName}`,
         body: preview, type: "message", read: false, createdAt: now,
-        meta: { convId: conversationId, senderId: caller.uid },
+        notifConvId: conversationId,
       });
     } else if (type === "group") {
       const membersSnap = await adminDb.collection("members").get();
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
         batch.set(notifRef, {
           userId: d.id, title: `${caller.displayName} sent a group message`,
           body: preview, type: "message", read: false, createdAt: now,
-          meta: { group: true },
+          notifGroup: true,
         });
       });
       await batch.commit();
@@ -173,7 +174,7 @@ export async function POST(req: NextRequest) {
           batch.set(notifRef, {
             userId: uid, title: `${caller.displayName} in ${cellSnap.data()?.name}`,
             body: preview, type: "message", read: false, createdAt: now,
-            meta: { cellId },
+            notifCellId: cellId,
           });
         });
         await batch.commit();
@@ -216,26 +217,28 @@ export async function PATCH(req: NextRequest) {
     });
     await batch.commit();
 
-    // Mark related message notifications as read so they disappear from the bell
-    let notifQuery;
-    if (type === "group") {
-      notifQuery = adminDb.collection("notifications")
-        .where("userId", "==", caller.uid).where("type", "==", "message").where("meta.group", "==", true);
-    } else if (type === "cell" && cellId) {
-      notifQuery = adminDb.collection("notifications")
-        .where("userId", "==", caller.uid).where("type", "==", "message").where("meta.cellId", "==", cellId);
-    } else if (conversationId && userId) {
-      notifQuery = adminDb.collection("notifications")
-        .where("userId", "==", caller.uid).where("type", "==", "message").where("meta.convId", "==", conversationId);
-    }
-    if (notifQuery) {
-      const notifSnap = await notifQuery.get();
-      if (!notifSnap.empty) {
-        const notifBatch = adminDb.batch();
-        notifSnap.docs.forEach((d) => { if (!d.data().read) notifBatch.update(d.ref, { read: true }); });
-        await notifBatch.commit();
+    // Mark related message notifications as read (best-effort — never fails the response)
+    try {
+      let notifQuery;
+      if (type === "group") {
+        notifQuery = adminDb.collection("notifications")
+          .where("userId", "==", caller.uid).where("notifGroup", "==", true).where("read", "==", false);
+      } else if (type === "cell" && cellId) {
+        notifQuery = adminDb.collection("notifications")
+          .where("userId", "==", caller.uid).where("notifCellId", "==", cellId).where("read", "==", false);
+      } else if (conversationId && userId) {
+        notifQuery = adminDb.collection("notifications")
+          .where("userId", "==", caller.uid).where("notifConvId", "==", conversationId).where("read", "==", false);
       }
-    }
+      if (notifQuery) {
+        const notifSnap = await notifQuery.get();
+        if (!notifSnap.empty) {
+          const notifBatch = adminDb.batch();
+          notifSnap.docs.forEach((d) => notifBatch.update(d.ref, { read: true }));
+          await notifBatch.commit();
+        }
+      }
+    } catch { /* non-critical */ }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
