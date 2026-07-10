@@ -55,7 +55,11 @@ export const SINGLETON_ROLES: Role[] = [
 const isPresident = (role: Role) => ["president", "vice_president"].includes(role);
 
 export const can = {
+  viewAllMembers: (role: Role) => !["member", "pending"].includes(role),
   manageMembers: (role: Role) => isPresident(role),
+  manageDues: (role: Role) => ["financial_secretary", "treasurer"].includes(role),
+  viewDuesStatus: (role: Role) => ["president", "financial_secretary", "treasurer"].includes(role),
+  sendDuesReminder: (role: Role) => role === "financial_secretary",
   sendBroadcast: (role: Role) =>
     ["president", "vice_president", "general_secretary", "assistant_general_secretary"].includes(role),
   viewFinance: (role: Role) =>

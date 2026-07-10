@@ -20,7 +20,7 @@ const navItems = [
   { href: "/dashboard/attendance", label: "Attendance", icon: Users, permission: "markAttendance" },
   { href: "/dashboard/finance", label: "Finance", icon: DollarSign, permission: "viewFinance" },
   { href: "/dashboard/broadcast", label: "Broadcast", icon: Megaphone, permission: "sendBroadcast" },
-  { href: "/dashboard/members", label: "Members", icon: Users, permission: "checkAbsentMembers" },
+  { href: "/dashboard/members", label: "Members", icon: Users, permission: "viewAllMembers" },
   { href: "/dashboard/admin", label: "Admin Panel", icon: Settings, permission: "accessAdmin" },
 ];
 

@@ -4,10 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
 import { staleWhileRevalidate } from "@/lib/cache";
-import { Users, Calendar, BookOpen, DollarSign, RefreshCw, AlertTriangle, MapPin } from "lucide-react";
+import { Users, Calendar, BookOpen, DollarSign, RefreshCw, AlertTriangle, MapPin, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
+
+const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 type DashData = {
   stats: { members: number; meetings: number; events: number };
@@ -44,6 +46,7 @@ export default function DashboardPage() {
   const [today, setToday] = useState("");
   const [key, setKey] = useState(0); // bump to re-trigger animations
   const [savingDistant, setSavingDistant] = useState(false);
+  const [dues, setDues] = useState<Record<string, { paid: boolean }> | null>(null);
 
   useEffect(() => {
     setToday(format(new Date(), "EEEE, MMMM d, yyyy"));
@@ -64,6 +67,15 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load member's own dues (non-executives only — executives see dues on members page)
+  useEffect(() => {
+    if (!user || can.viewDuesStatus(user.role)) return;
+    authFetch(`/api/dues?memberId=${user.uid}`)
+      .then((r) => r.json())
+      .then((d) => { if (d && !d.error) setDues(d); })
+      .catch(() => {});
+  }, [user]);
 
   // YAF countdown — 1 year (366 days) from yafStartedAt
   const yafCountdown = (() => {
@@ -188,6 +200,36 @@ export default function DashboardPage() {
               </Link>
             ))}
       </div>
+
+      {/* My Dues — shown to regular members only */}
+      {dues !== null && user && !can.viewDuesStatus(user.role) && (() => {
+        const year = new Date().getFullYear();
+        return (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5" style={{ animation: "fadeUp 0.35s ease 0.15s both" }}>
+            <h2 className="font-semibold text-gray-800 mb-3">My Dues — {year}</h2>
+            <div className="grid grid-cols-4 gap-1.5">
+              {MONTH_SHORT.map((name, i) => {
+                const m = i + 1;
+                const key = `${year}-${String(m).padStart(2, "0")}`;
+                const paid = dues[key]?.paid ?? false;
+                return (
+                  <div key={m} className={`rounded-lg py-2 flex flex-col items-center text-xs font-medium ${
+                    paid ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-400"
+                  }`}>
+                    {paid
+                      ? <CheckCircle2 size={12} className="mb-0.5 text-emerald-500" />
+                      : <XCircle size={12} className="mb-0.5 text-gray-300" />}
+                    {name}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {Object.values(dues).filter((d) => d.paid).length} of 12 months paid
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Upcoming Events */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5" style={{ animation: "fadeUp 0.35s ease 0.2s both" }}>

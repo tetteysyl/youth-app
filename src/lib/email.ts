@@ -145,6 +145,85 @@ export async function sendYafRemovalWarningEmail(memberEmail: string, memberName
   });
 }
 
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+export async function sendDuesPaidEmail(
+  memberEmail: string,
+  memberName: string,
+  months: number[],
+  year: number
+) {
+  const sorted = [...months].sort((a, b) => a - b);
+  let periodStr: string;
+  if (sorted.length === 12) {
+    periodStr = `the full year of ${year}`;
+  } else if (sorted.length === 1) {
+    periodStr = `${MONTH_NAMES[sorted[0] - 1]} ${year}`;
+  } else {
+    const names = sorted.map((m) => MONTH_NAMES[m - 1]);
+    const last = names.pop();
+    periodStr = `${names.join(", ")} and ${last} ${year}`;
+  }
+  await transporter.sendMail({
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
+    to: memberEmail,
+    subject: `Dues Payment Confirmed — ${sorted.length === 12 ? year : periodStr}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1a3a5c; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">YPG — Presbyterian Church of Ghana</h1>
+          <p style="color: #a0c4ff; margin: 5px 0 0;">Young People's Guild</p>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <p>Dear <strong>${memberName}</strong>,</p>
+          <p>This is to confirm that your dues payment for <strong>${periodStr}</strong> has been recorded.</p>
+          <div style="background: #d1fae5; border-left: 4px solid #059669; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong style="color: #065f46;">✓ Payment Recorded</strong><br/>
+            <span style="color: #047857;">Period: ${periodStr}</span>
+          </div>
+          <p>Thank you for staying up to date with your dues. Your faithfulness supports the work of the Guild.</p>
+          <p>Yours in Service,<br/><strong>YPG Financial Secretary</strong><br/>Presbyterian Church of Ghana — Saviour Congregation</p>
+        </div>
+        <div style="background: #1a3a5c; padding: 10px; text-align: center;">
+          <p style="color: #a0c4ff; margin: 0; font-size: 12px;">This is an automated message from the YPG Management System</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendDuesReminderEmail(
+  recipients: { email: string; name: string }[],
+  senderName: string,
+  month: string,
+  year: number
+) {
+  const emails = recipients.map((r) => r.email).join(",");
+  await transporter.sendMail({
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
+    bcc: emails,
+    subject: `Dues Reminder — ${month} ${year}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1a3a5c; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">YPG — Presbyterian Church of Ghana</h1>
+          <p style="color: #a0c4ff; margin: 5px 0 0;">Young People's Guild</p>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <p>Dear Member,</p>
+          <p>This is a friendly reminder that your dues for <strong>${month} ${year}</strong> are yet to be recorded.</p>
+          <p>Please make payment to the Financial Secretary or Treasurer at the earliest opportunity.</p>
+          <p>Thank you for your continued support of the Guild's work.</p>
+          <p>Yours in Service,<br/><strong>${senderName}</strong><br/>YPG Financial Secretary<br/>Presbyterian Church of Ghana — Saviour Congregation</p>
+        </div>
+        <div style="background: #1a3a5c; padding: 10px; text-align: center;">
+          <p style="color: #a0c4ff; margin: 0; font-size: 12px;">This is an automated message from the YPG Management System</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendBroadcastEmail(
   recipients: { email: string; name: string }[],
   subject: string,

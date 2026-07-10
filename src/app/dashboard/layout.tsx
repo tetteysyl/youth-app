@@ -22,6 +22,7 @@ const TYPE_ICON: Record<string, string> = {
   evangelism: "📖",
   broadcast: "📢",
   message: "💬",
+  dues: "💵",
   default: "🔔",
 };
 
