@@ -3,7 +3,7 @@ import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "@/lib/store";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
-import { Send, Users, User, Plus, ArrowLeft, Search, Camera } from "lucide-react";
+import { Send, Users, User, Plus, ArrowLeft, Search, Camera, X, Mail, Shield } from "lucide-react";
 import toast from "react-hot-toast";
 
 type Member = { id: string; displayName: string; email: string; role: string; photoURL?: string };
@@ -45,6 +45,7 @@ export default function MessagesPage() {
   const inboxPollRef = useRef<NodeJS.Timeout | null>(null);
   const cellPhotoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingCellPhoto, setUploadingCellPhoto] = useState(false);
+  const [profileSheet, setProfileSheet] = useState<{ type: "member"; member: Member } | { type: "cell"; cell: Cell } | null>(null);
 
   // Load members via Admin SDK API
   useEffect(() => {
@@ -252,10 +253,22 @@ export default function MessagesPage() {
             className="p-1.5 rounded-lg hover:bg-gray-100">
             <ArrowLeft size={18} className="text-gray-600" />
           </button>
+          {/* Avatar — clickable for direct/cell to show profile */}
           <div className="relative shrink-0">
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center overflow-hidden ${
-              activeChat.type === "group" || activeChat.type === "cell" ? "bg-[#3b1f6e]" : "bg-[#f0c940]"
-            }`}>
+            <button
+              className={`w-9 h-9 rounded-full flex items-center justify-center overflow-hidden focus:outline-none ${
+                activeChat.type === "group" ? "cursor-default" : "cursor-pointer hover:opacity-80 transition-opacity"
+              } ${activeChat.type === "group" || activeChat.type === "cell" ? "bg-[#3b1f6e]" : "bg-[#f0c940]"}`}
+              onClick={() => {
+                if (activeChat.type === "direct") {
+                  const m = members.find((m) => m.id === activeChat.peerId);
+                  if (m) setProfileSheet({ type: "member", member: m });
+                } else if (activeChat.type === "cell") {
+                  const c = cells.find((c) => c.id === activeChat.cellId);
+                  if (c) setProfileSheet({ type: "cell", cell: c });
+                }
+              }}
+            >
               {activeChat.type === "cell"
                 ? activeChat.peerPhotoURL
                   ? <img src={activeChat.peerPhotoURL} alt="" className="w-full h-full object-cover" />
@@ -265,14 +278,14 @@ export default function MessagesPage() {
                   : activeChat.peerPhotoURL
                     ? <img src={activeChat.peerPhotoURL} alt="" className="w-full h-full object-cover" />
                     : <span className="text-[#3b1f6e] font-bold text-sm">{activeChat.peerName?.charAt(0)}</span>}
-            </div>
+            </button>
             {activeChat.type === "cell" && cells.find((c) => c.id === activeChat.cellId)?.leaderId === user?.uid && (
               <>
                 <button
                   onClick={() => cellPhotoInputRef.current?.click()}
                   disabled={uploadingCellPhoto}
                   className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#f0c940] flex items-center justify-center shadow disabled:opacity-50"
-                  title="Update cell photo"
+                  title="Update cell group photo"
                 >
                   <Camera size={8} className="text-[#3b1f6e]" />
                 </button>
@@ -280,15 +293,30 @@ export default function MessagesPage() {
               </>
             )}
           </div>
-          <div>
-            <p className="font-semibold text-gray-800">{activeChat.peerName}</p>
+          <div className="flex-1 min-w-0">
+            <button
+              className={`text-left ${activeChat.type !== "group" ? "hover:underline cursor-pointer" : "cursor-default"}`}
+              onClick={() => {
+                if (activeChat.type === "direct") {
+                  const m = members.find((m) => m.id === activeChat.peerId);
+                  if (m) setProfileSheet({ type: "member", member: m });
+                } else if (activeChat.type === "cell") {
+                  const c = cells.find((c) => c.id === activeChat.cellId);
+                  if (c) setProfileSheet({ type: "cell", cell: c });
+                }
+              }}
+            >
+              <p className="font-semibold text-gray-800">{activeChat.peerName}</p>
+            </button>
             {activeChat.type === "direct" && activeChat.peerRole ? (
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(ROLE_COLORS as Record<string, string>)[activeChat.peerRole] || "bg-gray-100 text-gray-600"}`}>
                 {(ROLE_LABELS as Record<string, string>)[activeChat.peerRole] || activeChat.peerRole}
               </span>
+            ) : activeChat.type === "cell" && cells.find((c) => c.id === activeChat.cellId)?.leaderId === user?.uid ? (
+              <p className="text-xs text-[#f0c940] font-medium">Tap photo icon to update cell picture</p>
             ) : (
               <p className="text-xs text-gray-400">
-                {activeChat.type === "group" ? "All members" : "Cell chat"}
+                {activeChat.type === "group" ? "All members" : "Tap name or photo to view cell info"}
               </p>
             )}
           </div>
@@ -409,32 +437,36 @@ export default function MessagesPage() {
                 const summary = inboxSummary[m.id];
                 const unread = summary?.unread ?? 0;
                 return (
-                  <button key={m.id} onClick={() => openDirect(m)}
-                    className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left">
+                  <div key={m.id} className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left">
                     <div className="relative shrink-0">
-                      <div className="w-10 h-10 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm overflow-hidden">
+                      <button
+                        onClick={() => setProfileSheet({ type: "member", member: m })}
+                        className="w-10 h-10 rounded-full bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-sm overflow-hidden hover:opacity-80 transition-opacity focus:outline-none"
+                      >
                         {m.photoURL
                           ? <img src={m.photoURL} alt="" className="w-full h-full object-cover" />
                           : m.displayName?.charAt(0).toUpperCase()}
-                      </div>
+                      </button>
                       {unread > 0 && (
                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
                           {unread > 9 ? "9+" : unread}
                         </span>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <button onClick={() => openDirect(m)} className="flex-1 min-w-0 text-left">
                       <p className={`text-sm ${unread > 0 ? "font-bold text-gray-900" : "font-medium text-gray-800"}`}>
                         {m.displayName}
                       </p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(ROLE_COLORS as Record<string, string>)[m.role] || "bg-gray-100 text-gray-600"}`}>
                         {(ROLE_LABELS as Record<string, string>)[m.role] || m.role}
                       </span>
-                    </div>
-                    {unread > 0
-                      ? <span className="text-xs text-red-500 font-semibold shrink-0">{unread} new</span>
-                      : <Send size={14} className="text-gray-300 shrink-0" />}
-                  </button>
+                    </button>
+                    <button onClick={() => openDirect(m)} className="flex items-center gap-1 shrink-0 hover:text-[#3b1f6e] transition-colors">
+                      {unread > 0
+                        ? <span className="text-xs text-red-500 font-semibold">{unread} new</span>
+                        : <Send size={14} className="text-gray-300" />}
+                    </button>
+                  </div>
                 );
               })}
           </div>
@@ -452,24 +484,25 @@ export default function MessagesPage() {
               <p className="text-center py-8 text-gray-400 text-sm">You are not in any cell yet</p>
             )}
             {cells.map((cell) => (
-              <button
-                key={cell.id}
-                onClick={() => openCellChat(cell)}
-                className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left"
-              >
-                <div className="w-10 h-10 rounded-full bg-[#3b1f6e] flex items-center justify-center shrink-0 overflow-hidden">
+              <div key={cell.id} className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => setProfileSheet({ type: "cell", cell })}
+                  className="w-10 h-10 rounded-full bg-[#3b1f6e] flex items-center justify-center shrink-0 overflow-hidden hover:opacity-80 transition-opacity focus:outline-none"
+                >
                   {cell.photoURL
                     ? <img src={cell.photoURL} alt="" className="w-full h-full object-cover" />
                     : <Users size={18} className="text-white" />}
-                </div>
-                <div className="flex-1 min-w-0">
+                </button>
+                <button onClick={() => openCellChat(cell)} className="flex-1 min-w-0 text-left">
                   <p className="font-medium text-sm text-gray-800">{cell.name}</p>
                   <p className="text-xs text-gray-400">
                     Leader: {cell.leaderName} &bull; {cell.memberIds.length} member{cell.memberIds.length !== 1 ? "s" : ""}
                   </p>
-                </div>
-                <Send size={14} className="text-gray-300 shrink-0" />
-              </button>
+                </button>
+                <button onClick={() => openCellChat(cell)} className="shrink-0">
+                  <Send size={14} className="text-gray-300" />
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -517,6 +550,92 @@ export default function MessagesPage() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Profile Sheet ── */}
+      {profileSheet && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setProfileSheet(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {profileSheet.type === "member" ? (
+              <>
+                {/* Member profile */}
+                <div className="relative bg-gradient-to-b from-[#3b1f6e] to-[#2a1550] pt-10 pb-6 px-6 text-center">
+                  <button onClick={() => setProfileSheet(null)} className="absolute top-3 right-3 text-white/60 hover:text-white">
+                    <X size={18} />
+                  </button>
+                  <div className="w-20 h-20 rounded-full mx-auto mb-3 overflow-hidden border-4 border-[#f0c940] bg-[#f0c940] flex items-center justify-center font-bold text-[#3b1f6e] text-2xl">
+                    {profileSheet.member.photoURL
+                      ? <img src={profileSheet.member.photoURL} alt="" className="w-full h-full object-cover" />
+                      : profileSheet.member.displayName?.charAt(0).toUpperCase()}
+                  </div>
+                  <p className="text-white font-bold text-lg leading-tight">{profileSheet.member.displayName}</p>
+                  <span className={`mt-2 inline-block text-xs px-3 py-1 rounded-full font-medium ${(ROLE_COLORS as Record<string, string>)[profileSheet.member.role] || "bg-gray-100 text-gray-600"}`}>
+                    {(ROLE_LABELS as Record<string, string>)[profileSheet.member.role] || profileSheet.member.role}
+                  </span>
+                </div>
+                <div className="p-5 space-y-3">
+                  <div className="flex items-center gap-3 text-sm text-gray-700">
+                    <Mail size={15} className="text-gray-400 shrink-0" />
+                    <span className="break-all">{profileSheet.member.email}</span>
+                  </div>
+                  <button
+                    onClick={() => { openDirect(profileSheet.member); setProfileSheet(null); }}
+                    className="w-full bg-[#3b1f6e] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a1550] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Send size={14} /> Send Message
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Cell profile */}
+                <div className="relative bg-gradient-to-b from-[#3b1f6e] to-[#2a1550] pt-10 pb-6 px-6 text-center">
+                  <button onClick={() => setProfileSheet(null)} className="absolute top-3 right-3 text-white/60 hover:text-white">
+                    <X size={18} />
+                  </button>
+                  <div className="w-20 h-20 rounded-full mx-auto mb-3 overflow-hidden border-4 border-[#f0c940] bg-[#3b1f6e] flex items-center justify-center">
+                    {profileSheet.cell.photoURL
+                      ? <img src={profileSheet.cell.photoURL} alt="" className="w-full h-full object-cover" />
+                      : <Users size={32} className="text-white" />}
+                  </div>
+                  <p className="text-white font-bold text-lg">{profileSheet.cell.name} Cell</p>
+                  <p className="text-white/60 text-xs mt-1">{profileSheet.cell.memberIds.length} member{profileSheet.cell.memberIds.length !== 1 ? "s" : ""}</p>
+                </div>
+                <div className="p-5 space-y-3">
+                  <div className="flex items-center gap-3 text-sm text-gray-700">
+                    <Shield size={15} className="text-gray-400 shrink-0" />
+                    <span>Leader: <strong>{profileSheet.cell.leaderName || "Not assigned"}</strong></span>
+                  </div>
+                  {profileSheet.cell.leaderId === user?.uid && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 leading-relaxed">
+                      <p className="font-semibold mb-1">Your responsibility as Cell Leader</p>
+                      <p>As cell leader, you represent this group. You can set a group photo (tap the camera icon in the chat header) that all members see. Keep the photo appropriate and relevant to your cell identity.</p>
+                    </div>
+                  )}
+                  <div className="border-t border-gray-100 pt-3">
+                    <p className="text-xs text-gray-500 font-medium mb-2">Members</p>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {profileSheet.cell.memberIds.map((uid) => {
+                        const m = members.find((m) => m.id === uid);
+                        return m ? (
+                          <span key={uid} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
+                            {m.displayName}{uid === profileSheet.cell.leaderId ? " 👑" : ""}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { openCellChat(profileSheet.cell); setProfileSheet(null); }}
+                    className="w-full bg-[#3b1f6e] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a1550] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Send size={14} /> Open Cell Chat
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
