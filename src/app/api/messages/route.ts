@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import { requireAuthWithRole, unauth } from "@/lib/auth-server";
+import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+
+const GROUP_MESSAGE_ROLES = ["president", "vice_president", "general_secretary", "assistant_general_secretary", "male_organizer", "female_organizer", "financial_secretary", "treasurer", "evangelism_coordinator"];
+
+// Short-lived server cache for group and cell messages (invalidated on write)
+const _groupCache: { data: any[]; ts: number } | null = null;
+let groupCache: { data: any[]; ts: number } | null = _groupCache;
+const _cellCache = new Map<string, { data: any[]; ts: number }>();
+const MSG_TTL = 5_000;
 
 export async function GET(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
@@ -72,21 +80,34 @@ export async function GET(req: NextRequest) {
     }
 
     if (cellId) {
-      const snap = await adminDb.collection("messages").where("cellId", "==", cellId).get();
-      let msgs = snap.docs
-        .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }))
-        .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
-        .slice(-100);
+      const cached = _cellCache.get(cellId);
+      let msgs: any[];
+      if (cached && Date.now() - cached.ts < MSG_TTL) {
+        msgs = cached.data;
+      } else {
+        const snap = await adminDb.collection("messages").where("cellId", "==", cellId).get();
+        msgs = snap.docs
+          .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }))
+          .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+          .slice(-100);
+        _cellCache.set(cellId, { data: msgs, ts: Date.now() });
+      }
       if (viewerApprovedAt) msgs = msgs.filter((m: any) => (m.createdAt ?? 0) >= viewerApprovedAt!);
       return NextResponse.json(msgs);
     }
 
     if (type === "group") {
-      const snap = await adminDb.collection("messages").where("type", "==", "group").get();
-      let msgs = snap.docs
-        .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }))
-        .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
-        .slice(-100);
+      let msgs: any[];
+      if (groupCache && Date.now() - groupCache.ts < MSG_TTL) {
+        msgs = groupCache.data;
+      } else {
+        const snap = await adminDb.collection("messages").where("type", "==", "group").get();
+        msgs = snap.docs
+          .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() ?? null }))
+          .sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+          .slice(-100);
+        groupCache = { data: msgs, ts: Date.now() };
+      }
       if (viewerApprovedAt) msgs = msgs.filter((m: any) => (m.createdAt ?? 0) >= viewerApprovedAt!);
       return NextResponse.json(msgs);
     }
@@ -122,6 +143,8 @@ export async function POST(req: NextRequest) {
     const ALLOWED_TYPES = ["group", "direct", "cell"];
     if (!ALLOWED_TYPES.includes(type)) return NextResponse.json({ error: "Invalid type" }, { status: 400 });
 
+    if (type === "group" && !GROUP_MESSAGE_ROLES.includes(caller.role)) return forbidden();
+
     const safeContent = String(content).slice(0, 2000);
 
     const payload: any = {
@@ -139,6 +162,9 @@ export async function POST(req: NextRequest) {
     if (type === "cell") payload.cellId = cellId;
 
     const ref = await adminDb.collection("messages").add(payload);
+    // Invalidate read caches so the sender sees their own message immediately
+    if (type === "group") groupCache = null;
+    if (type === "cell" && cellId) _cellCache.delete(cellId);
     const now = new Date();
     const preview = safeContent.length > 60 ? safeContent.slice(0, 60) + "…" : safeContent;
 

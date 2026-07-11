@@ -95,11 +95,10 @@ export default function AdminPage() {
   const approve = async (uid: string, email: string, name: string) => {
     setLoading((p) => ({ ...p, [uid]: true }));
     try {
-      await updateDoc(doc(db, "members", uid), { role: "member", approvedAt: serverTimestamp() });
       await authFetch("/api/approve-member", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, name }),
+        body: JSON.stringify({ memberId: uid }),
       });
       // Add to their chosen cell, if any
       const pendingMember = pending.find((m) => m.id === uid);

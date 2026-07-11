@@ -178,26 +178,26 @@ export default function MembersPage() {
       .catch(() => {});
   }, [user]);
 
-  // Load dues summary for president view (once members load)
+  // Load dues summary for president view — single batch call instead of N individual requests
   useEffect(() => {
     if (!canViewDues || members.length === 0 || duesLoadedRef.current) return;
     duesLoadedRef.current = true;
     const year = new Date().getFullYear();
     const month = new Date().getMonth() + 1;
-    const key = `${year}-${String(month).padStart(2, "0")}`;
-    // Fetch dues for all members in parallel (batched)
-    Promise.all(
-      members.map((m) =>
-        authFetch(`/api/dues?memberId=${m.id}`)
-          .then((r) => r.json())
-          .then((d) => [m.id, d && !d.error ? d : {}] as [string, DuesPayments])
-          .catch(() => [m.id, {}] as [string, DuesPayments])
-      )
-    ).then((results) => {
-      const map: Record<string, DuesPayments> = {};
-      results.forEach(([id, d]) => { map[id] = d; });
-      setAllDues(map);
-    });
+    authFetch(`/api/dues/summary?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((summary: Record<string, { paid: boolean; paidAt: number | null }>) => {
+        if (summary && !summary.error) {
+          // Convert batch summary into the DuesPayments shape the UI expects
+          const key = `${year}-${String(month).padStart(2, "0")}`;
+          const map: Record<string, DuesPayments> = {};
+          for (const [memberId, info] of Object.entries(summary)) {
+            map[memberId] = { [key]: { paid: info.paid, paidAt: info.paidAt, markedByName: "" } };
+          }
+          setAllDues(map);
+        }
+      })
+      .catch(() => {});
   }, [members, canViewDues]);
 
   const saveDuesAmount = async () => {

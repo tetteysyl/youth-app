@@ -111,7 +111,7 @@ export default function MessagesPage() {
         type: activeChat.type,
       }),
     }).catch(() => {});
-    pollRef.current = setInterval(fetchMessages, 6000);
+    pollRef.current = setInterval(fetchMessages, 10000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeChat, fetchMessages, user]);
 

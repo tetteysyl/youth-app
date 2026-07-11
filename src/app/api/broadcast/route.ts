@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { sendBroadcastEmail } from "@/lib/email";
-import { requireAuth, requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+
+const BROADCAST_SENDERS = ["president", "vice_president", "general_secretary", "assistant_general_secretary"];
 
 export async function GET(req: NextRequest) {
-  const authed = await requireAuth(req);
+  const authed = await requireAuthWithRole(req);
   if (!authed) return unauth();
   try {
     const snap = await adminDb.collection("broadcasts").get();
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
-  if (caller.role !== "president") return forbidden();
+  if (!BROADCAST_SENDERS.includes(caller.role)) return forbidden();
   try {
     const { subject, message } = await req.json();
     if (!subject || !message) return NextResponse.json({ error: "Missing fields" }, { status: 400 });

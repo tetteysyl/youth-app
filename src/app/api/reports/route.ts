@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb, getAdminApp } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { requireAuth, requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
 const PUBLISHERS = ["president", "general_secretary"];
 const ALLOWED_REPORT_ROLES = ["president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer"];
@@ -13,7 +13,7 @@ const REPORTS_TTL = 60_000;
 function invalidateReportsCache() { _reportsCache = null; }
 
 export async function GET(req: NextRequest) {
-  const authed = await requireAuth(req);
+  const authed = await requireAuthWithRole(req);
   if (!authed) return unauth();
   try {
     if (_reportsCache && Date.now() - _reportsCache.ts < REPORTS_TTL) {

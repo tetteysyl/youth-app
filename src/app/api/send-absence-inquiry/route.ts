@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
   try {
     const { meetingTitle, meetingDate, absentIds } = await req.json();
     if (!absentIds?.length) return NextResponse.json({ sent: 0 });
+    if (!Array.isArray(absentIds) || absentIds.length > 500) return NextResponse.json({ error: "Invalid absentIds" }, { status: 400 });
+    const safeMeetingTitle = String(meetingTitle ?? "").slice(0, 200);
     const formattedDate = meetingDate ? format(new Date(meetingDate), "MMMM d, yyyy") : meetingDate;
     const now = new Date();
     let emailError = null;
@@ -22,11 +24,11 @@ export async function POST(req: NextRequest) {
         if (!snap.exists) return;
         const member = snap.data()!;
         if (member.email) {
-          try { await sendAbsenceInquiry(member.email, member.displayName, meetingTitle, formattedDate); } catch (e: any) { emailError = e.message; }
+          try { await sendAbsenceInquiry(member.email, member.displayName, safeMeetingTitle, formattedDate); } catch (e: any) { emailError = e.message; }
         }
         await adminDb.collection("notifications").add({
           userId: uid, title: "Absence Noticed",
-          body: `You were marked absent from "${meetingTitle}" on ${formattedDate}. Please let your organizer know.`,
+          body: `You were marked absent from "${safeMeetingTitle}" on ${formattedDate}. Please let your organizer know.`,
           type: "absence", read: false, createdAt: now,
         });
       })

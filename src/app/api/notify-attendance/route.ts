@@ -12,6 +12,8 @@ export async function POST(req: NextRequest) {
   try {
     const { meetingTitle, presentIds } = await req.json();
     if (!presentIds?.length) return NextResponse.json({ sent: 0 });
+    if (!Array.isArray(presentIds) || presentIds.length > 500) return NextResponse.json({ error: "Invalid presentIds" }, { status: 400 });
+    const safeMeetingTitle = String(meetingTitle ?? "").slice(0, 200);
     const recipients: { email: string; name: string }[] = [];
     await Promise.all(
       (presentIds as string[]).map(async (uid) => {
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
         if (snap.exists && snap.data()?.email) recipients.push({ email: snap.data()!.email, name: snap.data()!.displayName });
       })
     );
-    try { await sendBroadcastEmail(recipients, `Attendance Confirmed: ${meetingTitle}`, `Your attendance at "${meetingTitle}" has been recorded. Thank you for attending.`, caller.displayName); } catch {}
+    try { await sendBroadcastEmail(recipients, `Attendance Confirmed: ${safeMeetingTitle}`, `Your attendance at "${safeMeetingTitle}" has been recorded. Thank you for attending.`, caller.displayName); } catch {}
     return NextResponse.json({ sent: recipients.length });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }
