@@ -12,6 +12,15 @@ export async function GET(req: NextRequest) {
   if (!EXECUTIVE_ROLES.includes(caller.role)) return forbidden();
 
   try {
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status");
+
+    // Return pending members list for admin approval panel
+    if (status === "pending") {
+      const snap = await adminDb.collection("members").where("role", "==", "pending").get();
+      return NextResponse.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+
     const snap = await adminDb.collection("members")
       .where("role", "not-in", ["pending", "rejected"])
       .get();

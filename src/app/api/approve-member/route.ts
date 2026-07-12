@@ -8,12 +8,16 @@ export async function POST(req: NextRequest) {
   if (!caller) return unauth();
   if (caller.role !== "president") return forbidden();
   try {
-    const { memberId } = await req.json();
+    const { memberId, action = "approve" } = await req.json();
     if (!memberId) return NextResponse.json({ error: "Missing memberId" }, { status: 400 });
     const snap = await adminDb.collection("members").doc(memberId).get();
     if (!snap.exists) return NextResponse.json({ error: "Member not found" }, { status: 404 });
     const data = snap.data() as any;
     if (data.role !== "pending") return NextResponse.json({ error: "Member is not pending" }, { status: 400 });
+    if (action === "reject") {
+      await adminDb.collection("members").doc(memberId).update({ role: "rejected" });
+      return NextResponse.json({ ok: true });
+    }
     await adminDb.collection("members").doc(memberId).update({ role: "member", approvedAt: new Date(), approvedBy: caller.uid });
     if (data.email) await sendWelcomeEmail(data.email, data.displayName ?? "Member");
     return NextResponse.json({ ok: true });
