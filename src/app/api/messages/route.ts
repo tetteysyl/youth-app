@@ -68,6 +68,21 @@ export async function GET(req: NextRequest) {
         if (!convMap[peerId]) convMap[peerId] = { unread: 0, lastAt: 0 };
         if (ts > convMap[peerId].lastAt) convMap[peerId].lastAt = ts;
       });
+
+      // Enrich with peer names so the client doesn't need a separate members lookup
+      const peerIds = Object.keys(convMap);
+      if (peerIds.length > 0) {
+        const peerDocs = await Promise.all(
+          peerIds.map((id) => adminDb.collection("members").doc(id).get())
+        );
+        peerDocs.forEach((snap, i) => {
+          const peerId = peerIds[i];
+          const d = snap.exists ? snap.data() : null;
+          (convMap[peerId] as any).peerName = d?.displayName ?? null;
+          (convMap[peerId] as any).peerRole = d?.role ?? null;
+        });
+      }
+
       return NextResponse.json(convMap);
     }
 
