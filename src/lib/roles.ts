@@ -87,6 +87,5 @@ export const can = {
   checkAbsentMembers: (role: Role) =>
     ["president", "vice_president", "male_organizer", "female_organizer"].includes(role),
   accessAdmin: (role: Role) => isPresident(role),
-  // Only the President can see members' dates of birth.
-  viewDateOfBirth: (role: Role) => role === "president",
+  viewDateOfBirth: (role: Role) => ["president", "vice_president", "general_secretary"].includes(role),
 };
