@@ -23,9 +23,8 @@ export default function EvangelismPage() {
   useEffect(() => {
     if (!user || !can.sendBibleQuote(user.role)) { router.replace("/dashboard"); return; }
     const load = async () => {
-      const q = query(collection(db, "members"), where("role", "!=", "pending"));
-      const snap = await getDocs(q);
-      setMembers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const membersRes = await authFetch("/api/get-members").then((r) => r.json());
+      setMembers(Array.isArray(membersRes) ? membersRes : []);
 
       const hSnap = await getDocs(query(collection(db, "bible_quotes"), where("sentBy", "==", user.uid)));
       setHistory(hSnap.docs.map((d) => ({ id: d.id, ...d.data() })));

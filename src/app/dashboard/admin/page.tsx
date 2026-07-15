@@ -1,8 +1,6 @@
 ﻿"use client";
 import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useAuthStore } from "@/lib/store";
 import { can, Role, ROLE_LABELS, SINGLETON_ROLES } from "@/lib/roles";
 import { useRouter } from "next/navigation";
@@ -51,11 +49,11 @@ export default function AdminPage() {
   }, [user]);
 
   const loadData = async () => {
-    const [pendingSnap, activeMembers] = await Promise.all([
-      getDocs(query(collection(db, "members"), where("role", "==", "pending"))),
+    const [pendingRes, activeMembers] = await Promise.all([
+      authFetch("/api/admin/members?status=pending", { cache: "no-store" }).then((r) => r.json()),
       authFetch("/api/admin/members", { cache: "no-store" }).then((r) => r.json()),
     ]);
-    setPending(pendingSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setPending(Array.isArray(pendingRes) ? pendingRes : []);
     if (Array.isArray(activeMembers)) setAllMembers(activeMembers);
   };
 
@@ -122,7 +120,12 @@ export default function AdminPage() {
   const reject = async (uid: string, name: string) => {
     setLoading((p) => ({ ...p, [uid]: true }));
     try {
-      await updateDoc(doc(db, "members", uid), { role: "rejected" });
+      const res = await authFetch("/api/approve-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: uid, action: "reject" }),
+      });
+      if (!res.ok) throw new Error();
       toast.success(`${name}'s request rejected.`);
       loadData();
     } catch {
@@ -135,29 +138,34 @@ export default function AdminPage() {
   const changeRole = async (uid: string, newRole: Role) => {
     if (SINGLETON_ROLES.includes(newRole)) {
       const holder = allMembers.find((m) => m.role === newRole && m.id !== uid);
-      if (holder) {
-        // If the current user is the holder, offer a transfer instead of blocking
-        if (holder.id === user?.uid) {
-          const recipient = allMembers.find((m) => m.id === uid);
-          if (!confirm(
-            `Transfer the ${ROLE_LABELS[newRole]} role to ${recipient?.displayName}?\n\nYou will be demoted to Member and lose all ${ROLE_LABELS[newRole]} privileges immediately.`
-          )) return;
-          // Atomic transfer: elevate recipient, demote self
-          await Promise.all([
-            updateDoc(doc(db, "members", uid), { role: newRole }),
-            updateDoc(doc(db, "members", holder.id), { role: "member" }),
-          ]);
-          toast.success(`${ROLE_LABELS[newRole]} transferred to ${recipient?.displayName}.`);
-          // Update local user state and redirect (they've lost admin access)
-          setUser({ ...user!, role: "member" });
-          router.replace("/dashboard");
-          return;
-        }
+      if (holder && holder.id !== user?.uid) {
         toast.error(`${holder.displayName} already holds the ${ROLE_LABELS[newRole]} role. Reassign them first.`);
         return;
       }
+      if (holder && holder.id === user?.uid) {
+        // Transfer: the server elevates the recipient and demotes the caller atomically
+        const recipient = allMembers.find((m) => m.id === uid);
+        if (!confirm(
+          `Transfer the ${ROLE_LABELS[newRole]} role to ${recipient?.displayName}?\n\nYou will be demoted to Member and lose all ${ROLE_LABELS[newRole]} privileges immediately.`
+        )) return;
+        const res = await authFetch("/api/admin/members", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberId: uid, role: newRole }),
+        });
+        if (!res.ok) { toast.error("Failed to transfer role."); return; }
+        toast.success(`${ROLE_LABELS[newRole]} transferred to ${recipient?.displayName}.`);
+        setUser({ ...user!, role: "member" });
+        router.replace("/dashboard");
+        return;
+      }
     }
-    await updateDoc(doc(db, "members", uid), { role: newRole });
+    const res = await authFetch("/api/admin/members", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId: uid, role: newRole }),
+    });
+    if (!res.ok) { toast.error("Failed to update role."); return; }
     toast.success("Role updated!");
     loadData();
   };

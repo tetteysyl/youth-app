@@ -7,7 +7,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Use the downloaded service account JSON directly — most reliable approach
+// Use the downloaded service account JSON
 const serviceAccount = JSON.parse(
   readFileSync(
     resolve(__dirname, "../../../Downloads/ypg-pcg-firebase-adminsdk-fbsvc-27cc20014b.json"),

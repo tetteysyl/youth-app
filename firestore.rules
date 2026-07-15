@@ -23,13 +23,6 @@ service cloud.firestore {
       return isSignedIn() && getMember().role != 'pending' && getMember().role != 'rejected';
     }
 
-    function isManagement() {
-      return hasAnyRole([
-        'president', 'financial_secretary', 'treasurer',
-        'evangelism_coordinator', 'male_organizer', 'female_organizer'
-      ]);
-    }
-
     function isOrganizer() {
       return hasAnyRole(['president', 'male_organizer', 'female_organizer']);
     }
@@ -50,11 +43,12 @@ service cloud.firestore {
       allow create: if request.auth.uid == userId
         && request.resource.data.role == 'pending';
 
-      // A member can always read their own doc. Reading OTHER members' docs
-      // (which contain PII: dateOfBirth, gender, phone, email) is limited to
-      // management roles. Everyone else must go through the API, which strips
-      // sensitive fields based on role.
-      allow read: if request.auth.uid == userId || isManagement();
+      // A member may read ONLY their own doc directly. Every view of other members
+      // (directory, admin panel, cell/evangelism member pickers, messaging peers)
+      // goes through the API, which returns data filtered by the caller's role and
+      // strips PII (dateOfBirth, gender, phone) for non-privileged roles. This makes
+      // it impossible to pull another member's private fields straight from Firestore.
+      allow read: if request.auth.uid == userId;
 
       // Members may update only their own NON-privileged fields. Role and the
       // lifecycle/approval fields are server-managed (set via the admin API using

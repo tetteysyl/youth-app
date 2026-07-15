@@ -5,6 +5,9 @@ import { requireAuthWithRole } from "@/lib/auth-server";
 // Fields only executives/president/fin roles can see
 const SENSITIVE_FIELDS = ["dateOfBirth", "gender", "isDistantMember", "cellChoice", "removalWarningSent", "approvedAt"];
 const EXEC_ROLES = ["president", "vice_president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer", "male_organizer", "female_organizer", "evangelism_coordinator"];
+// Date of birth is more restricted than the other exec-only fields: only these
+// roles may ever see another member's DOB (mirrors can.viewDateOfBirth).
+const DOB_ROLES = ["president", "vice_president", "general_secretary"];
 
 let _membersCache: { data: any[]; ts: number } | null = null;
 const MEMBERS_TTL = 60_000;
@@ -17,11 +20,19 @@ function stripSensitiveFields(member: any) {
   return stripped;
 }
 
+// Remove dateOfBirth for callers who aren't allowed to see it (applied even to
+// execs, since DOB is limited to a narrower set than the other exec fields).
+function stripDob(member: any) {
+  const { dateOfBirth, ...rest } = member;
+  return rest;
+}
+
 export async function GET(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const isExec = EXEC_ROLES.includes(caller.role);
+  const canSeeDob = DOB_ROLES.includes(caller.role);
 
   try {
     const uid = new URL(req.url).searchParams.get("uid");
@@ -36,28 +47,36 @@ export async function GET(req: NextRequest) {
         createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? "",
         yafStartedAt: data.yafStartedAt?.toMillis?.() ?? data.yafStartedAt ?? null,
       };
+      // Own doc: always full. Otherwise strip exec-only fields for non-execs, and
+      // strip DOB for anyone who isn't allowed to see other members' birthdates.
+      if (uid === caller.uid) {
+        return NextResponse.json(result, { headers: { "Cache-Control": "private, max-age=60" } });
+      }
+      const base = isExec ? result : stripSensitiveFields(result);
       return NextResponse.json(
-        uid === caller.uid || isExec ? result : stripSensitiveFields(result),
+        canSeeDob ? base : stripDob(base),
         { headers: { "Cache-Control": "private, max-age=60" } }
       );
     }
 
+    const shape = (list: any[]) => {
+      const byRole = isExec ? list : list.map(stripSensitiveFields);
+      return canSeeDob ? byRole : byRole.map(stripDob);
+    };
+
     if (_membersCache && Date.now() - _membersCache.ts < MEMBERS_TTL) {
-      const cached = _membersCache.data;
-      return NextResponse.json(
-        isExec ? cached : cached.map(stripSensitiveFields),
-        { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" } }
-      );
+      return NextResponse.json(shape(_membersCache.data), {
+        headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" },
+      });
     }
     const snap = await adminDb.collection("members").get();
     const members = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((m: any) => m.role !== "pending" && m.role !== "rejected");
     _membersCache = { data: members, ts: Date.now() };
-    return NextResponse.json(
-      isExec ? members : members.map(stripSensitiveFields),
-      { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" } }
-    );
+    return NextResponse.json(shape(members), {
+      headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" },
+    });
   } catch (err: any) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

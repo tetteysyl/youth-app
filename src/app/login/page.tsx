@@ -11,12 +11,14 @@ import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import toast from "react-hot-toast";
 import Image from "next/image";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -272,9 +274,15 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Password</label>
-              <input type="password" placeholder="Enter your password" value={password}
-                onChange={(e) => setPassword(e.target.value)} required
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white" />
+              <div className="relative">
+                <input type={showPassword ? "text" : "password"} placeholder="Enter your password" value={password}
+                  onChange={(e) => setPassword(e.target.value)} required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e] bg-white" />
+                <button type="button" onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             {mode === "login" && (

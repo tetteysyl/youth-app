@@ -76,22 +76,34 @@ export async function PATCH(req: NextRequest) {
     const snap = await adminDb.collection("members").doc(memberId).get();
     if (!snap.exists) return NextResponse.json({ error: "Member not found" }, { status: 404 });
 
-    // Prevent assigning a singleton role already held by someone else
+    // Singleton roles can only be held by one member. If the role is already held
+    // by someone else, block the change — UNLESS the current holder is the caller,
+    // in which case this is a deliberate transfer: elevate the recipient and demote
+    // the caller to member atomically (doing it in two requests would fail, since
+    // demoting the caller first strips their own authorization for the second call).
     const SINGLETON = ["president","vice_president","general_secretary","assistant_general_secretary","financial_secretary","treasurer","evangelism_coordinator","male_organizer","female_organizer"];
+    let transferFromCaller = false;
     if (SINGLETON.includes(newRole)) {
       const existing = await adminDb.collection("members").where("role", "==", newRole).get();
       const holder = existing.docs.find(d => d.id !== memberId);
-      if (holder) return NextResponse.json({ error: `${newRole} is already assigned to another member` }, { status: 409 });
+      if (holder) {
+        if (holder.id === caller.uid) transferFromCaller = true;
+        else return NextResponse.json({ error: `${newRole} is already assigned to another member` }, { status: 409 });
+      }
     }
 
-    await adminDb.collection("members").doc(memberId).update({ role: newRole });
-    invalidateProfileCache(memberId);
+    if (transferFromCaller) {
+      const batch = adminDb.batch();
+      batch.update(adminDb.collection("members").doc(memberId), { role: newRole });
+      batch.update(adminDb.collection("members").doc(caller.uid), { role: "member" });
+      await batch.commit();
+      invalidateProfileCache(memberId);
+      invalidateProfileCache(caller.uid);
+    } else {
+      await adminDb.collection("members").doc(memberId).update({ role: newRole });
+      invalidateProfileCache(memberId);
+    }
     invalidateMembersCache();
-
-    // If caller is reassigning their own singleton role, demote them to member
-    if (memberId !== caller.uid && SINGLETON.includes(caller.role) && SINGLETON.includes(newRole)) {
-      // someone else is getting caller's singleton role — caller stays as-is unless they transferred it
-    }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
