@@ -44,19 +44,30 @@ service cloud.firestore {
 
     // ── Members ────────────────────────────────────────────────────────────────
     match /members/{userId} {
-      // Anyone can create their own member doc on registration
-      allow create: if request.auth.uid == userId;
+      // A user may create ONLY their own doc, and only as a pending member.
+      // This prevents a client from self-assigning a privileged role at sign-up
+      // (e.g. writing role: 'president' straight into Firestore).
+      allow create: if request.auth.uid == userId
+        && request.resource.data.role == 'pending';
 
-      // All approved members can read the members list (needed for messaging, attendance etc.)
-      allow read: if isApproved() || request.auth.uid == userId;
+      // A member can always read their own doc. Reading OTHER members' docs
+      // (which contain PII: dateOfBirth, gender, phone, email) is limited to
+      // management roles. Everyone else must go through the API, which strips
+      // sensitive fields based on role.
+      allow read: if request.auth.uid == userId || isManagement();
 
-      // Only president can update roles; members can update their own non-role fields
+      // Members may update only their own NON-privileged fields. Role and the
+      // lifecycle/approval fields are server-managed (set via the admin API using
+      // the Admin SDK, which bypasses these rules) and must never be self-written —
+      // otherwise a member could grant themselves a role, fake approval, or reset
+      // their YAF countdown to dodge auto-removal.
       allow update: if
         (request.auth.uid == userId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])) ||
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['role', 'isYaf', 'yafStartedAt', 'approvedAt', 'approvedBy', 'removalWarningSent'])) ||
         hasRole('president');
 
-      // No deletion allowed
+      // No deletion allowed (handled server-side via Admin SDK).
       allow delete: if false;
     }
 
@@ -98,7 +109,11 @@ service cloud.firestore {
     // ── Notifications (internal) ───────────────────────────────────────────────
     match /notifications/{notifId} {
       allow read: if isApproved() && request.auth.uid == resource.data.userId;
-      allow create: if isApproved();
+      // Notifications are only ever created server-side (Admin SDK, which bypasses
+      // rules). Blocking client creates stops a member from spoofing notifications
+      // to other users.
+      allow create: if false;
+      // A user may only mark their own notifications read / delete their own.
       allow update: if request.auth.uid == resource.data.userId;
       allow delete: if request.auth.uid == resource.data.userId;
     }
@@ -112,9 +127,24 @@ service cloud.firestore {
 
     // ── Messages ───────────────────────────────────────────────────────────────
     match /messages/{msgId} {
-      allow read: if isApproved();
-      allow create: if isApproved();
+      // Group messages are visible to all approved members. Direct messages are
+      // visible ONLY to their two participants — previously any approved member
+      // could read every private conversation in the guild.
+      allow read: if isApproved() && (
+        resource.data.type == 'group' ||
+        request.auth.uid == resource.data.senderId ||
+        request.auth.uid == resource.data.recipientId
+      );
+      // A client may only send a message AS itself (senderId must match the caller),
+      // preventing forged/impersonated messages. Role checks for group messages are
+      // enforced by the API.
+      allow create: if isApproved() && request.resource.data.senderId == request.auth.uid;
       allow delete: if request.auth.uid == resource.data.senderId;
+    }
+
+    // Deny everything not explicitly matched above.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
