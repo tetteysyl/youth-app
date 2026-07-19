@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ transactions, statements });
-  } catch (e: any) {
-    return NextResponse.json({ error: "Failed to load finance data", detail: e?.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Failed to load finance data" }, { status: 500 });
   }
 }
 

@@ -3,6 +3,16 @@ import { adminDb } from "@/lib/firebase-admin";
 import { sendWelcomeEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
+function calcAge(dob: string): number | null {
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
@@ -17,6 +27,12 @@ export async function POST(req: NextRequest) {
     if (action === "reject") {
       await adminDb.collection("members").doc(memberId).update({ role: "rejected" });
       return NextResponse.json({ ok: true });
+    }
+    // Server-side age enforcement at the approval gate: registration validates age
+    // client-side, but the server is the source of truth for who becomes a member.
+    const age = calcAge(data.dateOfBirth);
+    if (age === null || age < 18 || age > 30) {
+      return NextResponse.json({ error: "This applicant's age is outside the YPG range (18–30) and cannot be approved." }, { status: 400 });
     }
     await adminDb.collection("members").doc(memberId).update({ role: "member", approvedAt: new Date(), approvedBy: caller.uid });
     if (data.email) await sendWelcomeEmail(data.email, data.displayName ?? "Member");
