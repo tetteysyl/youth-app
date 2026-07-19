@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { sendAbsenceInquiry } from "@/lib/email";
 import { format } from "date-fns";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { rateLimit, rateLimited } from "@/lib/rate-limit";
 
 const ORGANIZERS = ["super_admin", "president", "general_secretary", "male_organizer", "female_organizer"];
 
@@ -10,6 +11,8 @@ export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
   if (!ORGANIZERS.includes(caller.role)) return forbidden();
+  const rl = rateLimit(`absence:${caller.uid}`, 15, 10 * 60_000);
+  if (!rl.ok) return rateLimited(rl.retryAfter);
   try {
     const { meetingTitle, meetingDate, absentIds } = await req.json();
     if (!absentIds?.length) return NextResponse.json({ sent: 0 });

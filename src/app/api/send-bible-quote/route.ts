@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { sendBroadcastEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { rateLimit, rateLimited } from "@/lib/rate-limit";
 
 const EVANGELISM_ROLES = ["super_admin", "president", "evangelism_coordinator"];
 
@@ -9,6 +10,8 @@ export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
   if (!EVANGELISM_ROLES.includes(caller.role)) return forbidden();
+  const rl = rateLimit(`biblequote:${caller.uid}`, 10, 10 * 60_000);
+  if (!rl.ok) return rateLimited(rl.retryAfter);
   try {
     const { quote, reference, recipientIds } = await req.json();
     if (!quote || !Array.isArray(recipientIds) || recipientIds.length === 0) return NextResponse.json({ error: "Missing fields" }, { status: 400 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { sendBroadcastEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { rateLimit, rateLimited } from "@/lib/rate-limit";
 
 const ORGANIZERS = ["super_admin", "president", "general_secretary", "male_organizer", "female_organizer"];
 
@@ -9,6 +10,8 @@ export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
   if (!ORGANIZERS.includes(caller.role)) return forbidden();
+  const rl = rateLimit(`notify-attendance:${caller.uid}`, 15, 10 * 60_000);
+  if (!rl.ok) return rateLimited(rl.retryAfter);
   try {
     const { meetingTitle, presentIds } = await req.json();
     if (!presentIds?.length) return NextResponse.json({ sent: 0 });

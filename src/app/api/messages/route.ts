@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { rateLimit, rateLimited } from "@/lib/rate-limit";
 
 const GROUP_MESSAGE_ROLES = ["president", "vice_president", "general_secretary", "assistant_general_secretary", "male_organizer", "female_organizer", "financial_secretary", "treasurer", "evangelism_coordinator"];
 
@@ -154,6 +155,8 @@ export async function POST(req: NextRequest) {
   if (!caller) return unauth();
   // The super admin cannot send any message (direct, group, or cell).
   if (caller.role === "super_admin") return forbidden();
+  const rl = rateLimit(`msg:${caller.uid}`, 40, 60_000);
+  if (!rl.ok) return rateLimited(rl.retryAfter);
 
   try {
     const body = await req.json();

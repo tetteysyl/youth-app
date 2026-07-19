@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { rateLimit, rateLimited } from "@/lib/rate-limit";
 import { sendDuesReminderEmail } from "@/lib/email";
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -12,6 +13,8 @@ export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
   if (!["super_admin", "financial_secretary"].includes(caller.role)) return forbidden();
+  const rl = rateLimit(`dues-remind:${caller.uid}`, 10, 10 * 60_000);
+  if (!rl.ok) return rateLimited(rl.retryAfter);
 
   const now = new Date();
   const year = now.getFullYear();
