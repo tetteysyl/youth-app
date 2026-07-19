@@ -7,18 +7,7 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-  {
-    key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://storage.googleapis.com https://*.googleusercontent.com",
-      "font-src 'self'",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com wss://*.firebaseio.com wss://firestore.googleapis.com",
-      "frame-ancestors 'none'",
-    ].join("; "),
-  },
+  // Content-Security-Policy is set per-request (with a nonce) in src/middleware.ts.
 ];
 
 const nextConfig: NextConfig = {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import AuthProvider from "@/components/AuthProvider";
 import { Toaster } from "react-hot-toast";
@@ -38,7 +39,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" className="h-full">
       <body className={`${inter.className} min-h-full bg-gray-50`}>
@@ -46,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <Toaster position="top-center" />
         </AuthProvider>
-        <script dangerouslySetInnerHTML={{
+        <script nonce={nonce} dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator) {
               window.addEventListener('load', function() {
