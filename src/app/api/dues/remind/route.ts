@@ -11,7 +11,7 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
-  if (caller.role !== "financial_secretary") return forbidden();
+  if (!["super_admin", "financial_secretary"].includes(caller.role)) return forbidden();
 
   const now = new Date();
   const year = now.getFullYear();

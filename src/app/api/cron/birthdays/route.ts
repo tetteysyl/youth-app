@@ -43,6 +43,9 @@ export async function GET(req: NextRequest) {
 
     for (const doc of snap.docs) {
       const data = doc.data();
+      // The super admin (software owner) is exempt from all age-based lifecycle:
+      // no YAF transition at 30, no auto-removal. It is not a church member.
+      if (data.role === "super_admin") continue;
       const dob: string | undefined = data.dateOfBirth;
       if (!dob) continue;
 

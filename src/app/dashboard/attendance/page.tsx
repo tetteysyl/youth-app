@@ -148,12 +148,18 @@ export default function AttendanceIndexPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {m.status !== "ended" && (
+                        {m.status !== "ended" ? (
                           <a href={`/dashboard/attendance/${m.id}`}
                             className="text-xs bg-[#3b1f6e] text-white px-3 py-1.5 rounded-lg hover:bg-[#2a1550]">
                             Mark Attendance
                           </a>
-                        )}
+                        ) : user && can.accessConsole(user.role) ? (
+                          // The admin can correct records of already-ended meetings.
+                          <a href={`/dashboard/attendance/${m.id}`}
+                            className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600">
+                            Edit Attendance
+                          </a>
+                        ) : null}
                         {totalCount > 0 && (
                           <button onClick={() => setExpanded(isOpen ? null : m.id)}
                             className="flex items-center gap-1 text-xs text-[#3b1f6e] hover:underline">

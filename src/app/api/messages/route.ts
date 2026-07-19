@@ -14,6 +14,9 @@ const MSG_TTL = 5_000;
 export async function GET(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
+  // The super admin is a back-office monitor and takes no part in messaging —
+  // it cannot read direct, group, or cell messages.
+  if (caller.role === "super_admin") return forbidden();
 
   try {
     const { searchParams } = new URL(req.url);
@@ -149,6 +152,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
+  // The super admin cannot send any message (direct, group, or cell).
+  if (caller.role === "super_admin") return forbidden();
 
   try {
     const body = await req.json();

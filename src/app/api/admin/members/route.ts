@@ -4,7 +4,7 @@ import { requireAuthWithRole, unauth, forbidden, invalidateProfileCache } from "
 import { invalidateMembersCache } from "@/app/api/get-members/route";
 import { invalidateCellsCache } from "@/app/api/cells/route";
 
-const EXECUTIVE_ROLES = ["president", "vice_president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer", "evangelism_coordinator", "male_organizer", "female_organizer"];
+const EXECUTIVE_ROLES = ["super_admin", "president", "vice_president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer", "evangelism_coordinator", "male_organizer", "female_organizer"];
 
 export async function GET(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     }
 
     const snap = await adminDb.collection("members")
-      .where("role", "not-in", ["pending", "rejected"])
+      .where("role", "not-in", ["pending", "rejected", "super_admin"])
       .get();
 
     const results = await Promise.all(
@@ -70,11 +70,38 @@ export async function PATCH(req: NextRequest) {
   if (!EXECUTIVE_ROLES.includes(caller.role)) return forbidden();
 
   try {
-    const { memberId, role: newRole } = await req.json();
-    if (!memberId || !newRole) return NextResponse.json({ error: "Missing memberId or role" }, { status: 400 });
+    const body = await req.json();
+    const { memberId, role: newRole, fields } = body;
+    if (!memberId) return NextResponse.json({ error: "Missing memberId" }, { status: 400 });
 
     const snap = await adminDb.collection("members").doc(memberId).get();
     if (!snap.exists) return NextResponse.json({ error: "Member not found" }, { status: 404 });
+
+    // The super admin (software owner) is not manageable from the app: its record
+    // and role can only change via the setup script (Admin SDK).
+    if (snap.data()?.role === "super_admin") {
+      return NextResponse.json({ error: "The super admin account cannot be modified from the app." }, { status: 403 });
+    }
+    // super_admin is never assignable through the app — only the setup script grants it.
+    if (newRole === "super_admin") {
+      return NextResponse.json({ error: "The super admin role cannot be assigned from the app." }, { status: 403 });
+    }
+
+    // Editing a member's record fields (name, phone, DOB, gender, distant flag) is
+    // reserved for the system owner and the President — not every executive.
+    if (fields && typeof fields === "object") {
+      if (!["super_admin", "president"].includes(caller.role)) return forbidden();
+      const EDITABLE = ["displayName", "phone", "dateOfBirth", "gender", "isDistantMember", "cellChoice"];
+      const patch: any = {};
+      for (const k of EDITABLE) if (k in fields) patch[k] = fields[k];
+      if (Object.keys(patch).length === 0) return NextResponse.json({ error: "No editable fields" }, { status: 400 });
+      await adminDb.collection("members").doc(memberId).update(patch);
+      invalidateProfileCache(memberId);
+      invalidateMembersCache();
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!newRole) return NextResponse.json({ error: "Missing role" }, { status: 400 });
 
     // Singleton roles can only be held by one member. If the role is already held
     // by someone else, block the change — UNLESS the current holder is the caller,
@@ -114,12 +141,18 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
-  if (caller.role !== "president") return forbidden();
+  if (!["super_admin", "president"].includes(caller.role)) return forbidden();
 
   try {
     const { uid } = await req.json();
     if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
     if (uid === caller.uid) return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
+
+    // The super admin (software owner) can never be deleted from the app.
+    const targetSnap = await adminDb.collection("members").doc(uid).get();
+    if (targetSnap.exists && targetSnap.data()?.role === "super_admin") {
+      return NextResponse.json({ error: "The super admin account cannot be deleted from the app." }, { status: 403 });
+    }
 
     try {
       await adminAuth.deleteUser(uid);

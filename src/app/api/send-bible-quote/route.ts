@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { sendBroadcastEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-const EVANGELISM_ROLES = ["president", "evangelism_coordinator"];
+const EVANGELISM_ROLES = ["super_admin", "president", "evangelism_coordinator"];
 
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);

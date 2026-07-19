@@ -1,6 +1,7 @@
 ﻿"use client";
 import { authFetch } from "@/lib/auth-fetch";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
 import { staleWhileRevalidate } from "@/lib/cache";
@@ -40,6 +41,11 @@ function SkeletonEvent() {
 
 export default function DashboardPage() {
   const { user, setUser } = useAuthStore();
+  const router = useRouter();
+  // The super admin has no member dashboard — send it to the console.
+  useEffect(() => {
+    if (user && !can.viewMemberDashboard(user.role)) router.replace("/dashboard/console");
+  }, [user, router]);
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,9 +75,10 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Load current user's own dues — everyone pays dues, load in parallel with dashboard
+  // Load current user's own dues — every member pays dues, load in parallel with dashboard.
+  // The super admin is not a member and pays no dues, so skip it.
   useEffect(() => {
-    if (!user) return;
+    if (!user || !can.paysDues(user.role)) return;
     authFetch(`/api/dues?memberId=${user.uid}`)
       .then((r) => r.json())
       .then((d) => { if (d && !d.error) setDues(d); })

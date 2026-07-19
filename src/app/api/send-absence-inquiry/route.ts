@@ -4,7 +4,7 @@ import { sendAbsenceInquiry } from "@/lib/email";
 import { format } from "date-fns";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-const ORGANIZERS = ["president", "general_secretary", "male_organizer", "female_organizer"];
+const ORGANIZERS = ["super_admin", "president", "general_secretary", "male_organizer", "female_organizer"];
 
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);

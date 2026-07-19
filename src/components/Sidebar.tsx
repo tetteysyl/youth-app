@@ -8,14 +8,16 @@ import { can, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
 import Image from "next/image";
 import {
   LayoutDashboard, Users, Calendar, DollarSign,
-  Megaphone, LogOut, Settings, X, ClipboardList, MessageCircle, FileText
+  Megaphone, LogOut, Settings, X, ClipboardList, MessageCircle, FileText, Gauge, Shield
 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, always: true },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "viewMemberDashboard" },
+  { href: "/dashboard/console", label: "Admin Console", icon: Shield, permission: "accessConsole" },
+  { href: "/dashboard/admin-overview", label: "Admin Dashboard", icon: Gauge, permission: "accessAdmin" },
   { href: "/dashboard/events", label: "Events & Activities", icon: Calendar, always: true },
   { href: "/dashboard/reports", label: "Reports", icon: FileText, always: true },
-  { href: "/dashboard/messages", label: "Messages", icon: MessageCircle, always: true },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageCircle, permission: "useMessaging" },
   { href: "/dashboard/meetings", label: "Meetings", icon: ClipboardList, always: true },
   { href: "/dashboard/attendance", label: "Attendance", icon: Users, permission: "markAttendance" },
   { href: "/dashboard/finance", label: "Finance", icon: DollarSign, permission: "viewFinance" },

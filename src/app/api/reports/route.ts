@@ -4,8 +4,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-const PUBLISHERS = ["president", "general_secretary"];
-const ALLOWED_REPORT_ROLES = ["president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer"];
+const PUBLISHERS = ["super_admin", "president", "general_secretary"];
+const ALLOWED_REPORT_ROLES = ["super_admin", "president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer"];
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
 
 let _reportsCache: { data: any[]; ts: number } | null = null;

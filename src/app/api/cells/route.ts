@@ -9,7 +9,7 @@ let _allCellsCache: { data: any[]; ts: number } | null = null;
 const CELLS_TTL = 60_000;
 export function invalidateCellsCache() { _allCellsCache = null; }
 
-const CELL_MANAGERS = ["president", "general_secretary"];
+const CELL_MANAGERS = ["super_admin", "president", "general_secretary"];
 
 async function ensureDefaultCells() {
   const snap = await adminDb.collection("cells").get();

@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth, requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-const ORGANIZERS = ["president", "general_secretary", "male_organizer", "female_organizer"];
+const ORGANIZERS = ["super_admin", "president", "general_secretary", "male_organizer", "female_organizer"];
 
 export async function GET(req: NextRequest) {
   const authed = await requireAuth(req);
@@ -34,10 +34,16 @@ export async function POST(req: NextRequest) {
     const snap = await adminDb.collection("meetings").doc(meetingId).get();
     if (!snap.exists) return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
     const excludedMemberIds: string[] = snap.data()?.excludedMemberIds ?? [];
+    const currentStatus: string = snap.data()?.status ?? "scheduled";
+    // Once a meeting has ended its record is locked to normal organizers; only the
+    // super admin may correct it (matches the UI, and enforced here server-side).
+    if (currentStatus === "ended" && caller.role !== "super_admin") return forbidden();
     const cleanPresentIds = presentIds.filter((id: string) => !excludedMemberIds.includes(id));
     const update: any = { attendees: cleanPresentIds };
     if (action === "end") { update.status = "ended"; update.endedAt = new Date().toISOString(); update.selfCheckIns = []; }
-    else update.status = "ongoing";
+    // Editing an already-ended meeting (e.g. the admin correcting a mistaken record)
+    // updates the attendee list but keeps the meeting ended — it is not re-opened.
+    else if (currentStatus !== "ended") { update.status = "ongoing"; }
     await adminDb.collection("meetings").doc(meetingId).update(update);
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }

@@ -4,10 +4,10 @@ import { requireAuthWithRole } from "@/lib/auth-server";
 
 // Fields only executives/president/fin roles can see
 const SENSITIVE_FIELDS = ["dateOfBirth", "gender", "isDistantMember", "cellChoice", "removalWarningSent", "approvedAt"];
-const EXEC_ROLES = ["president", "vice_president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer", "male_organizer", "female_organizer", "evangelism_coordinator"];
+const EXEC_ROLES = ["super_admin", "president", "vice_president", "general_secretary", "assistant_general_secretary", "financial_secretary", "treasurer", "male_organizer", "female_organizer", "evangelism_coordinator"];
 // Date of birth is more restricted than the other exec-only fields: only these
 // roles may ever see another member's DOB (mirrors can.viewDateOfBirth).
-const DOB_ROLES = ["president", "vice_president", "general_secretary"];
+const DOB_ROLES = ["super_admin", "president", "vice_president", "general_secretary"];
 
 let _membersCache: { data: any[]; ts: number } | null = null;
 const MEMBERS_TTL = 60_000;
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     const snap = await adminDb.collection("members").get();
     const members = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((m: any) => m.role !== "pending" && m.role !== "rejected");
+      .filter((m: any) => m.role !== "pending" && m.role !== "rejected" && m.role !== "super_admin");
     _membersCache = { data: members, ts: Date.now() };
     return NextResponse.json(shape(members), {
       headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=50" },

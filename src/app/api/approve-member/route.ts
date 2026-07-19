@@ -6,7 +6,7 @@ import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
-  if (caller.role !== "president") return forbidden();
+  if (!["super_admin", "president"].includes(caller.role)) return forbidden();
   try {
     const { memberId, action = "approve" } = await req.json();
     if (!memberId) return NextResponse.json({ error: "Missing memberId" }, { status: 400 });

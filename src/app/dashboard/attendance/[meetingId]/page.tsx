@@ -110,12 +110,18 @@ export default function AttendancePage() {
         body: JSON.stringify({ meetingId, presentIds, action: "save" }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      await authFetch("/api/notify-attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meetingId, meetingTitle: meeting?.title, presentIds }),
-      });
-      toast.success("Attendance saved and members notified!");
+      // Correcting an already-ended meeting is a silent back-office fix — don't
+      // re-notify members. Only a live save notifies present members.
+      if (meeting?.status === "ended") {
+        toast.success("Attendance record corrected.");
+      } else {
+        await authFetch("/api/notify-attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ meetingId, meetingTitle: meeting?.title, presentIds }),
+        });
+        toast.success("Attendance saved and members notified!");
+      }
     } catch (e: any) {
       toast.error("Failed to save attendance: " + e.message);
     } finally {

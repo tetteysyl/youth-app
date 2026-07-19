@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-const ALLOWED_ROLES = ["president", "financial_secretary", "treasurer"];
+const ALLOWED_ROLES = ["super_admin", "president", "financial_secretary", "treasurer"];
 
 // GET /api/dues/summary?year=2025&month=6
 // Returns { [memberId]: { paid: boolean, paidAt: number|null } } for the given month — single Firestore read

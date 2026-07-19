@@ -62,9 +62,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => unsub();
   }, [user]);
 
-  // Poll for unread messages — delayed 5s on mount so it doesn't compete with page load
+  // Poll for unread messages — delayed 5s on mount so it doesn't compete with page load.
+  // The super admin takes no part in messaging, so skip the poll entirely.
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.role === "super_admin") return;
     const check = () => {
       authFetch(`/api/messages?unreadCount=${user.uid}`)
         .then((r) => r.json())

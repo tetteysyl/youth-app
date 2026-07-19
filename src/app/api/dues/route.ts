@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const memberId = new URL(req.url).searchParams.get("memberId");
   if (!memberId) return NextResponse.json({ error: "Missing memberId" }, { status: 400 });
 
-  const allowed = ["president", "financial_secretary", "treasurer"].includes(caller.role) || caller.uid === memberId;
+  const allowed = ["super_admin", "president", "financial_secretary", "treasurer"].includes(caller.role) || caller.uid === memberId;
   if (!allowed) return forbidden();
 
   const snap = await adminDb.collection("dues").doc(memberId).get();
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
-  if (!["financial_secretary", "treasurer"].includes(caller.role)) return forbidden();
+  if (!["super_admin", "financial_secretary", "treasurer"].includes(caller.role)) return forbidden();
 
   const { memberId, months, year } = await req.json();
   if (!memberId || !Array.isArray(months) || months.length === 0 || !year) {

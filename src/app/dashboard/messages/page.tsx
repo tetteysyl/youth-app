@@ -2,8 +2,9 @@
 import { authFetch } from "@/lib/auth-fetch";
 import { staleWhileRevalidate } from "@/lib/cache";
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
-import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
+import { ROLE_LABELS, ROLE_COLORS, can } from "@/lib/roles";
 import { Send, Users, User, Plus, ArrowLeft, Search, Camera, X, Mail, Shield } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -22,6 +23,11 @@ function getConversationId(uid1: string, uid2: string) {
 
 export default function MessagesPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
+  // The super admin has no access to messaging.
+  useEffect(() => {
+    if (user && !can.useMessaging(user.role as any)) router.replace("/dashboard");
+  }, [user, router]);
   const [members, setMembers] = useState<Member[]>([]);
   const [cells, setCells] = useState<Cell[]>([]);
   const [view, setView] = useState<"inbox" | "chat">("inbox");

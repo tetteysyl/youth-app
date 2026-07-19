@@ -4,7 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { sendBroadcastEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-const BROADCAST_SENDERS = ["president", "vice_president", "general_secretary", "assistant_general_secretary"];
+const BROADCAST_SENDERS = ["super_admin", "president", "vice_president", "general_secretary", "assistant_general_secretary"];
 
 export async function GET(req: NextRequest) {
   const authed = await requireAuthWithRole(req);

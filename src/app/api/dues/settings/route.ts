@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const caller = await requireAuthWithRole(req);
   if (!caller) return unauth();
-  if (caller.role !== "treasurer") return forbidden();
+  if (!["super_admin", "treasurer"].includes(caller.role)) return forbidden();
 
   const { year, amount } = await req.json();
   if (!year || !amount || amount <= 0) return NextResponse.json({ error: "Invalid fields" }, { status: 400 });

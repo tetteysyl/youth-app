@@ -23,16 +23,22 @@ service cloud.firestore {
       return isSignedIn() && getMember().role != 'pending' && getMember().role != 'rejected';
     }
 
+    // The system-owner role. It is a member of every permission group below, so all
+    // existing checks keep working and simply also return true for the super admin.
+    function isOwner() {
+      return isSignedIn() && getMember().role == 'super_admin';
+    }
+
     function isOrganizer() {
-      return hasAnyRole(['president', 'male_organizer', 'female_organizer']);
+      return hasAnyRole(['super_admin', 'president', 'male_organizer', 'female_organizer']);
     }
 
     function isFinance() {
-      return hasAnyRole(['president', 'financial_secretary', 'treasurer']);
+      return hasAnyRole(['super_admin', 'president', 'financial_secretary', 'treasurer']);
     }
 
     function isEvangelism() {
-      return hasAnyRole(['president', 'evangelism_coordinator']);
+      return hasAnyRole(['super_admin', 'president', 'evangelism_coordinator']);
     }
 
     // ── Members ────────────────────────────────────────────────────────────────
@@ -55,11 +61,19 @@ service cloud.firestore {
       // the Admin SDK, which bypasses these rules) and must never be self-written —
       // otherwise a member could grant themselves a role, fake approval, or reset
       // their YAF countdown to dodge auto-removal.
+      // The super_admin (owner) role is managed ONLY by the setup script (Admin SDK,
+      // which bypasses these rules). No client write may grant it or alter an existing
+      // owner doc — this closes a path where a president could self-escalate to owner by
+      // writing role:'super_admin' straight to Firestore.
       allow update: if
-        (request.auth.uid == userId &&
-          !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['role', 'isYaf', 'yafStartedAt', 'approvedAt', 'approvedBy', 'removalWarningSent'])) ||
-        hasRole('president');
+        (
+          (request.auth.uid == userId &&
+            !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['role', 'isYaf', 'yafStartedAt', 'approvedAt', 'approvedBy', 'removalWarningSent'])) ||
+          (isOwner() || hasRole('president'))
+        )
+        && resource.data.role != 'super_admin'
+        && request.resource.data.role != 'super_admin';
 
       // No deletion allowed (handled server-side via Admin SDK).
       allow delete: if false;
@@ -76,28 +90,28 @@ service cloud.firestore {
       allow read: if isApproved();
       allow create: if isOrganizer();
       allow update: if isOrganizer(); // attendance updates, status changes
-      allow delete: if hasRole('president');
+      allow delete: if (isOwner() || hasRole('president'));
     }
 
     // ── Finance ────────────────────────────────────────────────────────────────
     match /transactions/{txId} {
       allow read: if isFinance();
       allow create, update: if isFinance();
-      allow delete: if hasRole('president');
+      allow delete: if (isOwner() || hasRole('president'));
     }
 
     // ── Bible Quotes / Evangelism ──────────────────────────────────────────────
     match /bible_quotes/{quoteId} {
       allow read: if isApproved();
       allow create: if isEvangelism();
-      allow delete: if hasRole('president');
+      allow delete: if (isOwner() || hasRole('president'));
     }
 
     // ── Broadcasts ─────────────────────────────────────────────────────────────
     match /broadcasts/{broadcastId} {
       allow read: if isApproved();
-      allow create: if hasRole('president');
-      allow delete: if hasRole('president');
+      allow create: if (isOwner() || hasRole('president'));
+      allow delete: if (isOwner() || hasRole('president'));
     }
 
     // ── Notifications (internal) ───────────────────────────────────────────────
@@ -116,7 +130,7 @@ service cloud.firestore {
     match /financial_statements/{stmtId} {
       allow read: if isApproved();
       allow create, update: if isFinance();
-      allow delete: if hasRole('president');
+      allow delete: if (isOwner() || hasRole('president'));
     }
 
     // ── Messages ───────────────────────────────────────────────────────────────
@@ -124,15 +138,16 @@ service cloud.firestore {
       // Group messages are visible to all approved members. Direct messages are
       // visible ONLY to their two participants — previously any approved member
       // could read every private conversation in the guild.
-      allow read: if isApproved() && (
+      // The super admin (owner) takes no part in messaging — excluded from all reads.
+      allow read: if isApproved() && !isOwner() && (
         resource.data.type == 'group' ||
         request.auth.uid == resource.data.senderId ||
         request.auth.uid == resource.data.recipientId
       );
       // A client may only send a message AS itself (senderId must match the caller),
       // preventing forged/impersonated messages. Role checks for group messages are
-      // enforced by the API.
-      allow create: if isApproved() && request.resource.data.senderId == request.auth.uid;
+      // enforced by the API. The super admin cannot send at all.
+      allow create: if isApproved() && !isOwner() && request.resource.data.senderId == request.auth.uid;
       allow delete: if request.auth.uid == resource.data.senderId;
     }
 

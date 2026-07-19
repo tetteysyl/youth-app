@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAuth, requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 
-const ORGANIZERS = ["president", "general_secretary", "male_organizer", "female_organizer"];
+const ORGANIZERS = ["super_admin", "president", "general_secretary", "male_organizer", "female_organizer"];
 
 let _cache: { data: any; ts: number } | null = null;
 const TTL = 20_000;

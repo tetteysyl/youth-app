@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     }
     const today = new Date().toISOString().split("T")[0];
     const [membersSnap, meetingsSnap, eventsSnap, upcomingSnap] = await Promise.all([
-      adminDb.collection("members").where("role", "!=", "pending").get(),
+      adminDb.collection("members").where("role", "not-in", ["pending", "super_admin"]).get(),
       adminDb.collection("meetings").get(),
       adminDb.collection("events").get(),
       adminDb.collection("events").where("date", ">=", today).orderBy("date", "asc").limit(3).get(),

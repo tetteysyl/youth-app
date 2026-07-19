@@ -55,3 +55,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to save transaction" }, { status: 500 });
   }
 }
+
+// Edit a transaction — finance roles (and super admin) only.
+export async function PATCH(req: NextRequest) {
+  const user = await requireAuthWithRole(req);
+  if (!user) return unauth();
+  if (!can.editFinance(user.role as any)) return forbidden();
+  try {
+    const { id, type, amount, description, date, category } = await req.json();
+    if (!id) return NextResponse.json({ error: "Missing transaction id" }, { status: 400 });
+    const patch: any = {};
+    if (type !== undefined) patch.type = type;
+    if (amount !== undefined) patch.amount = parseFloat(amount);
+    if (description !== undefined) patch.description = description;
+    if (date !== undefined) patch.date = date;
+    if (category !== undefined) patch.category = category;
+    if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    patch.updatedBy = user.displayName;
+    patch.updatedAt = new Date();
+    await adminDb.collection("transactions").doc(id).update(patch);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
+  }
+}
+
+// Delete a transaction — finance roles (and super admin) only.
+export async function DELETE(req: NextRequest) {
+  const user = await requireAuthWithRole(req);
+  if (!user) return unauth();
+  if (!can.editFinance(user.role as any)) return forbidden();
+  try {
+    const { id } = await req.json();
+    if (!id) return NextResponse.json({ error: "Missing transaction id" }, { status: 400 });
+    await adminDb.collection("transactions").doc(id).delete();
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 });
+  }
+}
