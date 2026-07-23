@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
   const membersSnap = await adminDb.collection("members")
     .where("role", "!=", "pending").get();
   const activeMembers = membersSnap.docs
-    .filter((d) => !["pending", "rejected"].includes(d.data().role))
+    // The super admin (owner) is not a congregation member and pays no dues.
+    .filter((d) => !["pending", "rejected", "super_admin"].includes(d.data().role))
     .map((d) => ({ id: d.id, email: d.data().email as string, name: d.data().displayName as string }));
 
   // Get dues for current month — check who already paid

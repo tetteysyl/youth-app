@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
     const { title, date, time, includeDistantMembers = true } = await req.json();
     const formattedDate = date ? format(new Date(date), "MMMM d, yyyy") : date;
     const snap = await adminDb.collection("members").where("role", "!=", "pending").get();
-    const members = snap.docs.filter((d) => d.data().role !== "rejected");
+    // Exclude rejected users and the super admin (owner does not attend meetings).
+    const members = snap.docs.filter((d) => !["rejected", "super_admin"].includes(d.data().role));
     const emailEligible = includeDistantMembers ? members : members.filter((d) => !d.data().isDistantMember);
     const recipients = emailEligible.map((d) => ({ email: d.data().email, name: d.data().displayName })).filter((r) => r.email);
     try { await sendBroadcastEmail(recipients, `Meeting Notice: ${title}`, `There is a meeting on ${formattedDate} at ${time}.`, caller.displayName); } catch {}

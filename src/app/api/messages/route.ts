@@ -203,7 +203,8 @@ export async function POST(req: NextRequest) {
       const membersSnap = await adminDb.collection("members").get();
       const batch = adminDb.batch();
       membersSnap.docs.forEach((d) => {
-        if (d.id === caller.uid || ["pending", "rejected"].includes(d.data().role)) return;
+        // The super admin takes no part in messaging, so it is never notified.
+        if (d.id === caller.uid || ["pending", "rejected", "super_admin"].includes(d.data().role)) return;
         const notifRef = adminDb.collection("notifications").doc();
         batch.set(notifRef, {
           userId: d.id, title: `${caller.displayName} sent a group message`,

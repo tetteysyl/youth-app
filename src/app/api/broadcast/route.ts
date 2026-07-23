@@ -38,21 +38,24 @@ export async function POST(req: NextRequest) {
     });
 
     const snap = await adminDb.collection("members").where("role", "!=", "pending").get();
+    // Recipients are actual congregation members: exclude rejected users and the
+    // super admin (the owner is not a member). Used for BOTH the in-app
+    // notifications and the emails, so the two can't drift apart.
+    const memberDocs = snap.docs.filter((d) => !["rejected", "super_admin"].includes(d.data().role));
     const batch = adminDb.batch();
     const now = new Date();
     const preview = message.length > 80 ? message.slice(0, 80) + "…" : message;
-    snap.docs.forEach((d) => {
-      if (d.data().role === "rejected") return;
+    memberDocs.forEach((d) => {
       const notifRef = adminDb.collection("notifications").doc();
       batch.set(notifRef, { userId: d.id, title: `${subject}`, body: preview, type: "broadcast", read: false, createdAt: now });
     });
     await batch.commit();
 
     try {
-      const recipients = snap.docs.map((d) => ({ email: d.data().email, name: d.data().displayName })).filter((r) => r.email);
+      const recipients = memberDocs.map((d) => ({ email: d.data().email, name: d.data().displayName })).filter((r) => r.email);
       await sendBroadcastEmail(recipients, subject, message, caller.displayName);
     } catch (emailErr) { console.error("Broadcast email failed:", emailErr); }
 
-    return NextResponse.json({ id: ref.id, sent: snap.size });
+    return NextResponse.json({ id: ref.id, sent: memberDocs.length });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }
