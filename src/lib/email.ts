@@ -1,7 +1,8 @@
 import nodemailer from "nodemailer";
 
-const GMAIL_USER = "pcg.saviour@gmail.com";
-const GMAIL_PASS = "hypsrgjcksyceiwq";
+// Credentials come from env ONLY — never hardcode an app password in source.
+const GMAIL_USER = process.env.GMAIL_USER ?? "";
+const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD ?? "";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",

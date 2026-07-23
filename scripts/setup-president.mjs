@@ -23,9 +23,13 @@ const app =
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const PRESIDENT_EMAIL = "stettey121@gmail.com";
-const PRESIDENT_PASSWORD = "AsT@2025";
-const PRESIDENT_NAME = "Sly";
+// No credential is stored in this repo. Pass the password via env when running:
+//   PRESIDENT_PASSWORD=... node scripts/setup-president.mjs
+// If omitted, the account is created without a password and the President sets
+// their own via "Forgot Password" on the login screen.
+const PRESIDENT_EMAIL = process.env.PRESIDENT_EMAIL ?? "stettey121@gmail.com";
+const PRESIDENT_PASSWORD = process.env.PRESIDENT_PASSWORD;
+const PRESIDENT_NAME = process.env.PRESIDENT_NAME ?? "Sly";
 const PRESIDENT_PHONE = "";
 
 async function main() {
@@ -36,8 +40,10 @@ async function main() {
   try {
     const user = await auth.createUser({
       email: PRESIDENT_EMAIL,
-      password: PRESIDENT_PASSWORD,
       displayName: PRESIDENT_NAME,
+      // Only set a password if one was supplied via env; otherwise the account is
+      // created password-less and the President uses "Forgot Password".
+      ...(PRESIDENT_PASSWORD ? { password: PRESIDENT_PASSWORD } : {}),
     });
     uid = user.uid;
     console.log(`✓ Firebase Auth user created: ${uid}`);
