@@ -107,4 +107,8 @@ export const can = {
   paysDues: (role: Role) => !isSuperAdmin(role),
   // The member dashboard/home is for congregants; the super admin uses the console instead.
   viewMemberDashboard: (role: Role) => !isSuperAdmin(role),
+  // Elections: the owner and the President organise them.
+  manageElections: (role: Role) => ["super_admin", "president"].includes(role),
+  // Everyone who is an actual member may cast a ballot (the super admin is not a member).
+  voteInElections: (role: Role) => !isSuperAdmin(role) && !["pending", "rejected"].includes(role),
 };
