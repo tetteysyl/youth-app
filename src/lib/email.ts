@@ -292,3 +292,48 @@ export async function sendMeetingRoleEmail(
     `,
   });
 }
+
+/**
+ * Bulk meeting reminder for the general membership (BCC, one send).
+ * Mirrors the MC/Leader reminder cadence: 3 days before, then 24 hours before.
+ */
+export async function sendMeetingReminderEmail(
+  recipients: { email: string; name: string }[],
+  meeting: { title: string; date: string; time: string; location?: string; agenda?: string },
+  whenLabel: string,
+  duties?: { mcName?: string; leaderName?: string }
+) {
+  if (recipients.length === 0) return;
+  await transporter.sendMail({
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
+    bcc: recipients.map((r) => r.email).join(","),
+    subject: `Reminder: ${meeting.title} — ${whenLabel}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #3b1f6e, #2a1550); padding: 24px; text-align: center;">
+          <h1 style="color: #f0c940; margin: 0; font-size: 20px;">Meeting Reminder</h1>
+          <p style="color: #d9c7ff; margin: 6px 0 0; font-size: 13px;">${whenLabel}</p>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <p>Dear Member,</p>
+          <p>This is a reminder of the meeting below, taking place <strong>${whenLabel}</strong>.</p>
+          <div style="background: white; border-left: 4px solid #3b1f6e; padding: 15px; margin: 20px 0;">
+            <strong style="font-size: 16px;">${meeting.title}</strong><br/>
+            <span style="color: #666;">Date: ${meeting.date}</span><br/>
+            <span style="color: #666;">Time: ${meeting.time}</span>
+            ${meeting.location ? `<br/><span style="color: #666;">Venue: ${meeting.location}</span>` : ""}
+            ${duties?.leaderName ? `<br/><span style="color: #666;">Leader: ${duties.leaderName}</span>` : ""}
+            ${duties?.mcName ? `<br/><span style="color: #666;">MC: ${duties.mcName}</span>` : ""}
+            ${meeting.agenda ? `<br/><br/><span style="color: #666;">Agenda: ${meeting.agenda}</span>` : ""}
+          </div>
+          <p>Kindly make every effort to attend and be punctual.</p>
+          <p style="margin-top: 20px; font-style: italic; color: #666;">"To Know His Will and To Do It"</p>
+          <p>Yours in Service,<br/><strong>YPG Secretariat</strong><br/>Presbyterian Church of Ghana — Saviour Congregation</p>
+        </div>
+        <div style="background: #1a3a5c; padding: 10px; text-align: center;">
+          <p style="color: #a0c4ff; margin: 0; font-size: 12px;">This is an automated reminder from the YPG Management System</p>
+        </div>
+      </div>
+    `,
+  });
+}

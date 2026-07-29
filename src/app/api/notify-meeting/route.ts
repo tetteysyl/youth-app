@@ -22,6 +22,22 @@ export async function POST(req: NextRequest) {
     const emailEligible = includeDistantMembers ? members : members.filter((d) => !d.data().isDistantMember);
     const recipients = emailEligible.map((d) => ({ email: d.data().email, name: d.data().displayName })).filter((r) => r.email);
     try { await sendBroadcastEmail(recipients, `Meeting Notice: ${title}`, `There is a meeting on ${formattedDate} at ${time}.`, caller.displayName); } catch {}
-    return NextResponse.json({ sent: recipients.length });
+
+    // In-app notification as well as the email, so the bell reflects the meeting
+    // immediately. Uses the same eligibility as the email (distant members are
+    // skipped when the organiser excluded them).
+    const now = new Date();
+    const batch = adminDb.batch();
+    emailEligible.forEach((d) => {
+      batch.set(adminDb.collection("notifications").doc(), {
+        userId: d.id,
+        title: `Meeting: ${title}`,
+        body: `There is a meeting on ${formattedDate} at ${time}.`,
+        type: "meeting", read: false, createdAt: now,
+      });
+    });
+    await batch.commit();
+
+    return NextResponse.json({ sent: recipients.length, notified: emailEligible.length });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }
