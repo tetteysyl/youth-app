@@ -249,3 +249,46 @@ export async function sendBroadcastEmail(
     `,
   });
 }
+
+/**
+ * Reminds the MC or the meeting Leader of their duty ahead of a meeting.
+ * Sent 3 days before and again 24 hours before (see /api/cron/meeting-reminders).
+ */
+export async function sendMeetingRoleEmail(
+  memberEmail: string,
+  memberName: string,
+  duty: "MC" | "Leader",
+  meeting: { title: string; date: string; time: string; location?: string; agenda?: string },
+  whenLabel: string
+) {
+  const dutyLabel = duty === "MC" ? "Master of Ceremonies (MC)" : "Meeting Leader";
+  await transporter.sendMail({
+    from: `"YPG - PCG Saviour" <${GMAIL_USER}>`,
+    to: memberEmail,
+    subject: `Reminder: you are ${duty} for "${meeting.title}" — ${whenLabel}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #3b1f6e, #2a1550); padding: 24px; text-align: center;">
+          <h1 style="color: #f0c940; margin: 0; font-size: 20px;">You are the ${dutyLabel}</h1>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <p>Dear <strong>${memberName}</strong>,</p>
+          <p>This is a reminder that you have been assigned as <strong>${dutyLabel}</strong> for the meeting below, taking place <strong>${whenLabel}</strong>.</p>
+          <div style="background: white; border-left: 4px solid #3b1f6e; padding: 15px; margin: 20px 0;">
+            <strong style="font-size: 16px;">${meeting.title}</strong><br/>
+            <span style="color: #666;">Date: ${meeting.date}</span><br/>
+            <span style="color: #666;">Time: ${meeting.time}</span>
+            ${meeting.location ? `<br/><span style="color: #666;">Venue: ${meeting.location}</span>` : ""}
+            ${meeting.agenda ? `<br/><br/><span style="color: #666;">Agenda: ${meeting.agenda}</span>` : ""}
+          </div>
+          <p>Kindly prepare accordingly. If you are unable to fulfil this role, please inform the executives as early as possible so an alternative can be arranged.</p>
+          <p style="margin-top: 20px; font-style: italic; color: #666;">"To Know His Will and To Do It"</p>
+          <p>Yours in Service,<br/><strong>YPG Secretariat</strong><br/>Presbyterian Church of Ghana — Saviour Congregation</p>
+        </div>
+        <div style="background: #1a3a5c; padding: 10px; text-align: center;">
+          <p style="color: #a0c4ff; margin: 0; font-size: 12px;">This is an automated reminder from the YPG Management System</p>
+        </div>
+      </div>
+    `,
+  });
+}

@@ -4,17 +4,20 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store";
 import { can } from "@/lib/roles";
 import { staleWhileRevalidate, invalidate } from "@/lib/cache";
-import { Plus, Clock, CheckCircle, Ban } from "lucide-react";
+import { Plus, Clock, CheckCircle, Ban, Mic, UserCheck } from "lucide-react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
+
+type MemberOption = { id: string; displayName?: string };
 
 export default function MeetingsPage() {
   const { user } = useAuthStore();
   const [meetings, setMeetings] = useState<any[]>([]);
+  const [members, setMembers] = useState<MemberOption[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", date: "", time: "", agenda: "", location: "" });
+  const [form, setForm] = useState({ title: "", date: "", time: "", agenda: "", location: "", mcId: "", leaderId: "" });
   const [includeDistantMembers, setIncludeDistantMembers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
@@ -28,6 +31,15 @@ export default function MeetingsPage() {
   };
 
   useEffect(() => { loadMeetings(); }, []);
+
+  // Member list for the MC / Leader pickers — only needed by organisers.
+  useEffect(() => {
+    if (!user || !can.scheduleMeeting(user.role)) return;
+    authFetch("/api/get-members")
+      .then((r) => r.json())
+      .then((m) => setMembers(Array.isArray(m) ? m : []))
+      .catch(() => {});
+  }, [user]);
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +57,7 @@ export default function MeetingsPage() {
         body: JSON.stringify({ title: form.title, date: form.date, time: form.time, includeDistantMembers }),
       });
       toast.success("Meeting scheduled and members notified!");
-      setForm({ title: "", date: "", time: "", agenda: "", location: "" });
+      setForm({ title: "", date: "", time: "", agenda: "", location: "", mcId: "", leaderId: "" });
       setIncludeDistantMembers(true);
       setShowForm(false);
       invalidate("/api/meetings");
@@ -122,6 +134,34 @@ export default function MeetingsPage() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e]" />
               <textarea placeholder="Agenda" value={form.agenda} onChange={(e) => setForm({ ...form, agenda: e.target.value })}
                 rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e]" />
+
+              {/* MC and Leader — both optional. Whoever is chosen is reminded
+                  3 days and 24 hours before the meeting, by notification and email. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                    <Mic size={12} /> MC
+                  </label>
+                  <select value={form.mcId} onChange={(e) => setForm({ ...form, mcId: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e]">
+                    <option value="">Not assigned</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                    <UserCheck size={12} /> Leader
+                  </label>
+                  <select value={form.leaderId} onChange={(e) => setForm({ ...form, leaderId: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#3b1f6e]">
+                    <option value="">Not assigned</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 -mt-1">
+                The MC and Leader are reminded by notification and email 3 days and 24 hours before the meeting.
+              </p>
               <label className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 cursor-pointer">
                 <input type="checkbox" checked={includeDistantMembers}
                   onChange={(e) => setIncludeDistantMembers(e.target.checked)}
@@ -185,6 +225,24 @@ export default function MeetingsPage() {
                     {m.date ? format(new Date(m.date), "MMMM d, yyyy") : "—"} at {m.time}
                   </p>
                   {m.location && <p className="text-xs text-gray-400 mt-1">📍 {m.location}</p>}
+                  {(m.mcName || m.leaderName) && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {m.mcName && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
+                          user?.uid === m.mcId ? "bg-[#f0c940] text-[#3b1f6e]" : "bg-purple-50 text-[#3b1f6e]"
+                        }`}>
+                          <Mic size={10} /> MC: {user?.uid === m.mcId ? "You" : m.mcName}
+                        </span>
+                      )}
+                      {m.leaderName && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
+                          user?.uid === m.leaderId ? "bg-[#f0c940] text-[#3b1f6e]" : "bg-indigo-50 text-indigo-700"
+                        }`}>
+                          <UserCheck size={10} /> Leader: {user?.uid === m.leaderId ? "You" : m.leaderName}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {m.agenda && <p className="text-xs text-gray-500 mt-2 italic">{m.agenda}</p>}
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${statusBadge(m.status)}`}>
