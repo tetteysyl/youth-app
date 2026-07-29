@@ -99,19 +99,23 @@ export async function GET(req: NextRequest) {
         }
 
         // ── General membership ──────────────────────────────────────────────
-        // Everyone else eligible for this meeting gets the same reminder, on the
-        // same schedule. The MC/Leader are skipped here — their duty reminder
-        // above already carries every meeting detail.
+        // Members are reminded ONLY 24 hours before. The 3-day reminder is for
+        // the MC and Leader alone, since they need lead time to prepare.
+        // The MC/Leader are skipped in this blast — their duty reminder above
+        // already carries every meeting detail.
+        const remindMembers = w.offset === 1;
         const excluded: string[] = m.excludedMemberIds ?? [];
         const dutyIds = new Set(duties.map((d) => d.uid));
-        const memberSnap = await adminDb.collection("members").get();
-        const audience = memberSnap.docs.filter((d) => {
-          const x = d.data() as any;
-          if (["pending", "rejected", "super_admin"].includes(x.role)) return false;
-          if (excluded.includes(d.id)) return false;
-          if (dutyIds.has(d.id)) return false;
-          return true;
-        });
+        // Skip the members read entirely on the 3-day pass.
+        const audience = remindMembers
+          ? (await adminDb.collection("members").get()).docs.filter((d) => {
+              const x = d.data() as any;
+              if (["pending", "rejected", "super_admin"].includes(x.role)) return false;
+              if (excluded.includes(d.id)) return false;
+              if (dutyIds.has(d.id)) return false;
+              return true;
+            })
+          : [];
 
         if (audience.length > 0) {
           const batch = adminDb.batch();
