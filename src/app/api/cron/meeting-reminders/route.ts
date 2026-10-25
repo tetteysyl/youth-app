@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { sendMeetingRoleEmail, sendMeetingReminderEmail } from "@/lib/email";
 import { format } from "date-fns";
+import { sendTemplate, sendTemplateBulk, WA_TEMPLATES, isWhatsAppConfigured } from "@/lib/whatsapp";
 
 /**
  * GET /api/cron/meeting-reminders — runs daily via Vercel Cron.
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
 
     let notified = 0;
     let emailed = 0;
+    let whatsapped = 0;
     let meetingsProcessed = 0;
 
     for (const w of windows) {
@@ -96,6 +98,11 @@ export async function GET(req: NextRequest) {
               console.error(`Meeting role email failed for ${member.email}:`, e);
             }
           }
+
+          // WhatsApp duty reminder (no-op when the provider is off)
+          if (await sendTemplate(member.phone, WA_TEMPLATES.meetingDuty, [
+            member.displayName ?? "Member", d.label, m.title ?? "", w.label, prettyDate, m.time ?? "",
+          ])) whatsapped++;
         }
 
         // ── General membership ──────────────────────────────────────────────
@@ -145,6 +152,16 @@ export async function GET(req: NextRequest) {
               console.error("Meeting reminder bulk email failed:", e);
             }
           }
+
+          // WhatsApp to the same audience
+          const wa = await sendTemplateBulk(
+            audience.map((d) => ({
+              phone: (d.data() as any).phone,
+              params: [m.title ?? "", w.label, prettyDate, m.time ?? ""],
+            })),
+            WA_TEMPLATES.meetingReminder
+          );
+          whatsapped += wa.sent;
         }
 
         await doc.ref.update({ [w.flag]: true });
@@ -152,7 +169,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, meetingsProcessed, notified, emailed });
+    return NextResponse.json({ ok: true, meetingsProcessed, notified, emailed, whatsapped, whatsappEnabled: isWhatsAppConfigured() });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

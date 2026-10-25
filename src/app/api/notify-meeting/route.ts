@@ -4,6 +4,7 @@ import { sendBroadcastEmail } from "@/lib/email";
 import { format } from "date-fns";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 import { rateLimit, rateLimited } from "@/lib/rate-limit";
+import { sendTemplateBulk, WA_TEMPLATES } from "@/lib/whatsapp";
 
 const ORGANIZERS = ["super_admin", "president", "general_secretary", "male_organizer", "female_organizer"];
 
@@ -38,6 +39,16 @@ export async function POST(req: NextRequest) {
     });
     await batch.commit();
 
-    return NextResponse.json({ sent: recipients.length, notified: emailEligible.length });
+    // WhatsApp — same audience as the email. No-op when the provider is not
+    // configured, and members without a usable phone number are simply skipped.
+    const wa = await sendTemplateBulk(
+      emailEligible.map((d) => ({
+        phone: (d.data() as any).phone,
+        params: [title, formattedDate, time],
+      })),
+      WA_TEMPLATES.meetingNotice
+    );
+
+    return NextResponse.json({ sent: recipients.length, notified: emailEligible.length, whatsapp: wa });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }
