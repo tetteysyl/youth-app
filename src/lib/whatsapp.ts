@@ -29,6 +29,14 @@ export const WA_TEMPLATES = {
   meetingNotice: "meeting_notice",
   meetingReminder: "meeting_reminder",
   meetingDuty: "meeting_duty",
+  duesReminder: "dues_reminder",
+  duesPaid: "dues_paid",
+  birthdayWish: "birthday_wish",
+  welcomeMember: "welcome_member",
+  absenceInquiry: "absence_inquiry",
+  yafTransition: "yaf_transition",
+  yafRemovalWarning: "yaf_removal_warning",
+  announcement: "ypg_announcement",
 } as const;
 
 export interface WhatsAppResult {
@@ -38,10 +46,16 @@ export interface WhatsAppResult {
   disabled?: boolean;
 }
 
-/** Meta rejects empty params; keep every placeholder non-empty. */
-function clean(v: string | undefined | null): string {
-  const s = (v ?? "").toString().trim();
-  return s.length ? s : "-";
+/**
+ * Meta rejects a template parameter that is empty, or that contains a newline,
+ * a tab, or 4+ consecutive spaces. Broadcast and bible-quote bodies are
+ * multi-line, so collapse all whitespace to single spaces and cap the length.
+ */
+function clean(v: string | undefined | null, max = 900): string {
+  let s = (v ?? "").toString().replace(/\s+/g, " ").trim();
+  if (!s.length) return "-";
+  if (s.length > max) s = s.slice(0, max - 1).trimEnd() + "…";
+  return s;
 }
 
 /**
@@ -140,4 +154,44 @@ export function waMeetingDuty(
   name: string, duty: string, title: string, when: string, date: string, time: string
 ) {
   return sendTemplate(phone, WA_TEMPLATES.meetingDuty, [name, duty, title, when, date, time]);
+}
+
+/** Dues outstanding. params: name, month, year */
+export function waDuesReminder(phone: string | null | undefined, name: string, month: string, year: string | number) {
+  return sendTemplate(phone, WA_TEMPLATES.duesReminder, [name, month, String(year)]);
+}
+
+/** Dues recorded as paid. params: name, period, amount */
+export function waDuesPaid(phone: string | null | undefined, name: string, period: string, amount: string) {
+  return sendTemplate(phone, WA_TEMPLATES.duesPaid, [name, period, amount]);
+}
+
+/** Birthday greeting. params: name */
+export function waBirthday(phone: string | null | undefined, name: string) {
+  return sendTemplate(phone, WA_TEMPLATES.birthdayWish, [name]);
+}
+
+/** Account approved. params: name */
+export function waWelcome(phone: string | null | undefined, name: string) {
+  return sendTemplate(phone, WA_TEMPLATES.welcomeMember, [name]);
+}
+
+/** Missed a meeting. params: name, meeting title, date */
+export function waAbsence(phone: string | null | undefined, name: string, title: string, date: string) {
+  return sendTemplate(phone, WA_TEMPLATES.absenceInquiry, [name, title, date]);
+}
+
+/** Turned 30 / moved to YAF. params: name */
+export function waYafTransition(phone: string | null | undefined, name: string) {
+  return sendTemplate(phone, WA_TEMPLATES.yafTransition, [name]);
+}
+
+/** Account closing in 30 days. params: name, closing date */
+export function waYafRemovalWarning(phone: string | null | undefined, name: string, closingDate: string) {
+  return sendTemplate(phone, WA_TEMPLATES.yafRemovalWarning, [name, closingDate]);
+}
+
+/** General announcement / bible quote. params: subject, message */
+export function waAnnouncement(phone: string | null | undefined, subject: string, message: string) {
+  return sendTemplate(phone, WA_TEMPLATES.announcement, [subject, message]);
 }

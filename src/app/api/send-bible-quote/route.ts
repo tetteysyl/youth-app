@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { sendBroadcastEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 import { rateLimit, rateLimited } from "@/lib/rate-limit";
+import { sendTemplateBulk, WA_TEMPLATES } from "@/lib/whatsapp";
 
 const EVANGELISM_ROLES = ["super_admin", "president", "evangelism_coordinator"];
 
@@ -19,10 +20,14 @@ export async function POST(req: NextRequest) {
     const safeQuote = String(quote).slice(0, 2000);
     const safeReference = reference ? String(reference).slice(0, 200) : null;
     const recipients: { email: string; name: string }[] = [];
+    const waTargets: { phone?: string | null; params: string[] }[] = [];
     await Promise.all(
       (recipientIds as string[]).map(async (uid) => {
         const snap = await adminDb.collection("members").doc(uid).get();
-        if (snap.exists && snap.data()?.email) recipients.push({ email: snap.data()!.email, name: snap.data()!.displayName });
+        if (!snap.exists) return;
+        const x = snap.data()!;
+        if (x.email) recipients.push({ email: x.email, name: x.displayName });
+        waTargets.push({ phone: x.phone, params: ["", ""] });
       })
     );
     const subject = safeReference ? `Devotional: ${safeReference}` : "Daily Devotional from YPG";
@@ -39,6 +44,10 @@ export async function POST(req: NextRequest) {
         })
       )
     );
-    return NextResponse.json({ sent: recipients.length, emailError });
+    const wa = await sendTemplateBulk(
+      waTargets.map((t) => ({ ...t, params: [subject, message] })),
+      WA_TEMPLATES.announcement
+    );
+    return NextResponse.json({ sent: recipients.length, emailError, whatsapp: wa });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }

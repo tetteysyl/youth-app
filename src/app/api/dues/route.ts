@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 import { sendDuesPaidEmail } from "@/lib/email";
+import { waDuesPaid } from "@/lib/whatsapp";
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DEFAULT_DUES_AMOUNT = 5;
@@ -136,6 +137,8 @@ export async function POST(req: NextRequest) {
     try { await sendDuesPaidEmail(memberEmail, memberName, newMonths, year); }
     catch (e) { console.error("Dues paid email failed:", e); }
   }
+
+  await waDuesPaid(memberData?.phone, memberName, periodStr, `GH₵${totalAmount}`);
 
   return NextResponse.json({ ok: true, recorded: newMonths.length, amount: totalAmount });
 }

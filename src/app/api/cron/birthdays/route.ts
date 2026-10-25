@@ -3,6 +3,7 @@ import { adminDb, getAdminApp } from "@/lib/firebase-admin";
 import { getAuth } from "firebase-admin/auth";
 import { sendBirthdayEmail, sendYafTransitionEmail, sendYafRemovalWarningEmail } from "@/lib/email";
 import { format } from "date-fns";
+import { waBirthday, waYafTransition, waYafRemovalWarning } from "@/lib/whatsapp";
 
 const YAF_GRACE_PERIOD_MS = 366 * 24 * 60 * 60 * 1000; // 1 year (366 days)
 const WARNING_THRESHOLD_MS = 336 * 24 * 60 * 60 * 1000; // warn 30 days before removal (day 336)
@@ -83,6 +84,7 @@ export async function GET(req: NextRequest) {
           if (data.email) {
             try { await sendYafRemovalWarningEmail(data.email, data.displayName || "Member", removalDate); } catch (e) { console.error(e); }
           }
+          await waYafRemovalWarning(data.phone, data.displayName || "Member", removalDate);
           await doc.ref.update({ removalWarningSent: true });
           removalWarningsSent++;
         }
@@ -106,6 +108,7 @@ export async function GET(req: NextRequest) {
         if (data.email) {
           try { await sendBirthdayEmail(data.email, data.displayName || "Member"); } catch (e) { console.error(e); }
         }
+        await waBirthday(data.phone, data.displayName || "Member");
         birthdaysSent++;
       } else if (age === 30 && !data.isYaf) {
         // Turning 30 today — becomes a YAF member, starts the 1-year countdown
@@ -120,6 +123,7 @@ export async function GET(req: NextRequest) {
         if (data.email) {
           try { await sendYafTransitionEmail(data.email, data.displayName || "Member"); } catch (e) { console.error(e); }
         }
+        await waYafTransition(data.phone, data.displayName || "Member");
         await doc.ref.update({ isYaf: true, yafStartedAt: now });
         yafTransitions++;
 

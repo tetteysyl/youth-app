@@ -49,14 +49,21 @@ The token shown on the API Setup page expires in 24 hours. For production:
    and **whatsapp_business_management** → generate.
 4. Copy it — **it is shown once**. This is a permanent token.
 
-## 3. Register the three templates
+## 3. Register the templates
 
 **WhatsApp Manager → Account tools → Message templates → Create template.**
 For each: Category **Utility**, Language **English**.
 
-Create them with these **exact names** — the app looks them up by name.
+Use these **exact names** — the app looks them up by name. Keep the `{{n}}`
+placeholders in the same order; if you reword, the number and order of
+placeholders must not change or values land in the wrong slots.
 
-### `meeting_notice`
+> Meta rejects anything that reads as marketing, so keep the Utility category
+> and this factual tone.
+
+### Meetings
+
+**`meeting_notice`** — a meeting has been scheduled
 ```
 A new YPG meeting has been scheduled: {{1}}
 
@@ -65,9 +72,9 @@ Time: {{3}}
 
 Please make every effort to attend.
 ```
-Sample values: `Monthly General Meeting` · `Friday, 7 August 2026` · `18:00`
+Samples: `Monthly General Meeting` · `Friday, 7 August 2026` · `18:00`
 
-### `meeting_reminder`
+**`meeting_reminder`** — 24 hours before, to all members
 ```
 Reminder: {{1}} is {{2}}.
 
@@ -76,9 +83,9 @@ Time: {{4}}
 
 Please be punctual.
 ```
-Sample values: `Monthly General Meeting` · `tomorrow` · `Friday, 7 August 2026` · `18:00`
+Samples: `Monthly General Meeting` · `tomorrow` · `Friday, 7 August 2026` · `18:00`
 
-### `meeting_duty`
+**`meeting_duty`** — 3 days and 24 hours before, to the MC and Leader
 ```
 Hello {{1}}, you are the {{2}} for {{3}}, taking place {{4}}.
 
@@ -87,12 +94,87 @@ Time: {{6}}
 
 Kindly prepare accordingly. If you cannot serve, please inform the executives early.
 ```
-Sample values: `Sakitey Ernest` · `Master of Ceremonies (MC)` · `Monthly General Meeting` · `in 3 days` · `Friday, 7 August 2026` · `18:00`
+Samples: `Sakitey Ernest` · `Master of Ceremonies (MC)` · `Monthly General Meeting` · `in 3 days` · `Friday, 7 August 2026` · `18:00`
 
-> Meta rejects templates that look promotional, so keep the Utility category and
-> this factual tone. If you reword, the **number and order of `{{n}}`
-> placeholders must stay the same**, or the app will send the wrong values into
-> the wrong slots.
+### Dues
+
+**`dues_reminder`** — monthly dues outstanding
+```
+Hello {{1}}, your YPG dues for {{2}} {{3}} have not been recorded yet.
+
+Kindly settle them with the Financial Secretary at your earliest convenience.
+```
+Samples: `Ebenezer Darteh` · `August` · `2026`
+
+**`dues_paid`** — payment recorded
+```
+Hello {{1}}, your YPG dues for {{2}} have been recorded as paid.
+
+Amount: {{3}}
+
+Thank you.
+```
+Samples: `Ebenezer Darteh` · `August 2026` · `GH₵5.00`
+
+### Membership
+
+**`welcome_member`** — account approved
+```
+Welcome to YPG, {{1}}! Your account has been approved and you can now sign in to the YPG app.
+
+God bless you as you serve in this guild.
+```
+Samples: `Ebenezer Darteh`
+
+**`birthday_wish`** — birthday greeting
+```
+Happy Birthday, {{1}}! The entire YPG family wishes you a blessed new year of life.
+
+"To Know His Will and To Do It"
+```
+Samples: `Ebenezer Darteh`
+
+**`absence_inquiry`** — marked absent from a meeting
+```
+Hello {{1}}, we noticed you were absent from {{2}} on {{3}}.
+
+We hope all is well. Kindly let your organizer know the reason for your absence.
+```
+Samples: `Ebenezer Darteh` · `Monthly General Meeting` · `7 August 2026`
+
+**`yaf_transition`** — turned 30, moving to YAF
+```
+Congratulations {{1}}! You have officially transitioned to YAF (Young Adult Fellowship).
+
+You have 1 year remaining in the YPG system. Thank you for your service to the Guild.
+```
+Samples: `Ebenezer Darteh`
+
+**`yaf_removal_warning`** — account closing in 30 days
+```
+Hello {{1}}, your YPG account is scheduled to close on {{2}}, 30 days from now.
+
+If you believe this is a mistake, please contact the YPG executives.
+```
+Samples: `Ebenezer Darteh` · `7 September 2026`
+
+### General
+
+**`ypg_announcement`** — broadcasts, devotionals, attendance confirmations
+```
+{{1}}
+
+{{2}}
+```
+Samples: `Harvest Thanksgiving` · `This Sunday we gather for our annual harvest service. Please be seated by 8:30am.`
+
+> Because the body is only placeholders, Meta may ask for more context — if it
+> is rejected, add a fixed first line such as `YPG Notice:` above `{{1}}`.
+> The app passes the subject as `{{1}}` and the message as `{{2}}`.
+>
+> **Note:** WhatsApp forbids newlines inside a parameter, so multi-line
+> broadcasts are flattened to a single paragraph in the WhatsApp copy. The
+> email keeps the original formatting.
 
 ## 4. Set the environment variables
 
@@ -133,9 +215,19 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://<your-domain>/api/cron/meet
 | Event | Who | Template |
 |---|---|---|
 | Meeting scheduled | all eligible members | `meeting_notice` |
-| 3 days before | MC and Leader only | `meeting_duty` |
+| 3 days before a meeting | MC and Leader only | `meeting_duty` |
 | 24 hours before | MC and Leader | `meeting_duty` |
 | 24 hours before | all other members | `meeting_reminder` |
+| Attendance recorded | members marked present | `ypg_announcement` |
+| Marked absent | the absent members | `absence_inquiry` |
+| Dues reminder sent | members who haven't paid | `dues_reminder` |
+| Dues recorded as paid | that member | `dues_paid` |
+| Member approved | the new member | `welcome_member` |
+| Birthday | that member | `birthday_wish` |
+| Turns 30 (YAF) | that member | `yaf_transition` |
+| 30 days before removal | that member | `yaf_removal_warning` |
+| Broadcast | all members | `ypg_announcement` |
+| Bible quote / devotional | chosen recipients | `ypg_announcement` |
 
 Members excluded from a meeting (distant members) and the super admin are
 skipped, exactly as with email.

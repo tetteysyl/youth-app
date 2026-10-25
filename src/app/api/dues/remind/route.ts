@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 import { rateLimit, rateLimited } from "@/lib/rate-limit";
+import { sendTemplateBulk, WA_TEMPLATES } from "@/lib/whatsapp";
 import { sendDuesReminderEmail } from "@/lib/email";
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const activeMembers = membersSnap.docs
     // The super admin (owner) is not a congregation member and pays no dues.
     .filter((d) => !["pending", "rejected", "super_admin"].includes(d.data().role))
-    .map((d) => ({ id: d.id, email: d.data().email as string, name: d.data().displayName as string }));
+    .map((d) => ({ id: d.id, email: d.data().email as string, name: d.data().displayName as string, phone: d.data().phone as string | undefined }));
 
   // Get dues for current month — check who already paid
   const duesSnap = await adminDb.collection("dues").get();
@@ -37,21 +38,32 @@ export async function POST(req: NextRequest) {
     if (d.data().payments?.[key]?.paid) paidIds.add(d.id);
   });
 
-  const unpaid = activeMembers.filter((m) => !paidIds.has(m.id) && m.email);
+  // Email needs an address; WhatsApp needs a phone. Treat them separately so a
+  // member with only one of the two is still reached.
+  const unpaidAll = activeMembers.filter((m) => !paidIds.has(m.id));
+  const unpaid = unpaidAll.filter((m) => m.email);
 
-  if (unpaid.length === 0) {
+  if (unpaidAll.length === 0) {
     return NextResponse.json({ ok: true, sent: 0, message: "All members have paid for this month" });
   }
 
+  // WhatsApp to every unpaid member who has a phone number
+  const wa = await sendTemplateBulk(
+    unpaidAll.map((m) => ({ phone: m.phone, params: [m.name ?? "Member", monthName, String(year)] })),
+    WA_TEMPLATES.duesReminder
+  );
+
   // Send email (best-effort)
-  try {
-    await sendDuesReminderEmail(unpaid, caller.displayName, monthName, year);
-  } catch (e) { console.error("Dues reminder email failed:", e); }
+  if (unpaid.length) {
+    try {
+      await sendDuesReminderEmail(unpaid, caller.displayName, monthName, year);
+    } catch (e) { console.error("Dues reminder email failed:", e); }
+  }
 
   // In-app notifications to unpaid members
   const batch = adminDb.batch();
   const nowDate = new Date();
-  unpaid.forEach((m) => {
+  unpaidAll.forEach((m) => {
     const ref = adminDb.collection("notifications").doc();
     batch.set(ref, {
       userId: m.id,
@@ -64,5 +76,5 @@ export async function POST(req: NextRequest) {
   });
   await batch.commit();
 
-  return NextResponse.json({ ok: true, sent: unpaid.length });
+  return NextResponse.json({ ok: true, whatsapp: wa, sent: unpaid.length });
 }

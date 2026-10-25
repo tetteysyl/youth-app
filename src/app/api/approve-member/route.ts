@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { sendWelcomeEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
+import { waWelcome } from "@/lib/whatsapp";
 
 function calcAge(dob: string): number | null {
   const birth = new Date(dob);
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
     }
     await adminDb.collection("members").doc(memberId).update({ role: "member", approvedAt: new Date(), approvedBy: caller.uid });
     if (data.email) await sendWelcomeEmail(data.email, data.displayName ?? "Member");
+    await waWelcome(data.phone, data.displayName ?? "Member");
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }

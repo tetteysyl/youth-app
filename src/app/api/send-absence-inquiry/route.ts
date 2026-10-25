@@ -4,6 +4,7 @@ import { sendAbsenceInquiry } from "@/lib/email";
 import { format } from "date-fns";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 import { rateLimit, rateLimited } from "@/lib/rate-limit";
+import { waAbsence } from "@/lib/whatsapp";
 
 const ORGANIZERS = ["super_admin", "president", "general_secretary", "male_organizer", "female_organizer"];
 
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
         if (member.email) {
           try { await sendAbsenceInquiry(member.email, member.displayName, safeMeetingTitle, formattedDate); } catch (e: any) { emailError = e.message; }
         }
+        await waAbsence(member.phone, member.displayName ?? "Member", safeMeetingTitle, formattedDate);
         await adminDb.collection("notifications").add({
           userId: uid, title: "Absence Noticed",
           body: `You were marked absent from "${safeMeetingTitle}" on ${formattedDate}. Please let your organizer know.`,

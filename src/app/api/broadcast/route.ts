@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { sendBroadcastEmail } from "@/lib/email";
 import { requireAuthWithRole, unauth, forbidden } from "@/lib/auth-server";
 import { rateLimit, rateLimited } from "@/lib/rate-limit";
+import { sendTemplateBulk, WA_TEMPLATES } from "@/lib/whatsapp";
 
 const BROADCAST_SENDERS = ["super_admin", "president", "vice_president", "general_secretary", "assistant_general_secretary"];
 
@@ -56,6 +57,11 @@ export async function POST(req: NextRequest) {
       await sendBroadcastEmail(recipients, subject, message, caller.displayName);
     } catch (emailErr) { console.error("Broadcast email failed:", emailErr); }
 
-    return NextResponse.json({ id: ref.id, sent: memberDocs.length });
+    const wa = await sendTemplateBulk(
+      memberDocs.map((d) => ({ phone: (d.data() as any).phone, params: [subject, message] })),
+      WA_TEMPLATES.announcement
+    );
+
+    return NextResponse.json({ id: ref.id, sent: memberDocs.length, whatsapp: wa });
   } catch { return NextResponse.json({ error: "Failed" }, { status: 500 }); }
 }
