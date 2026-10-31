@@ -76,12 +76,14 @@ Samples: `Monthly General Meeting` · `Friday, 7 August 2026` · `18:00`
 
 **`meeting_reminder`** — 24 hours before, to all members
 ```
-Reminder: {{1}} is {{2}}.
+Hello, this is a reminder from the Young People's Guild.
+
+Our meeting {{1}} is coming up {{2}}.
 
 Date: {{3}}
 Time: {{4}}
 
-Please be punctual.
+Please make every effort to attend and arrive on time. We look forward to seeing you there.
 ```
 Samples: `Monthly General Meeting` · `tomorrow` · `Friday, 7 August 2026` · `18:00`
 
@@ -95,6 +97,11 @@ Time: {{6}}
 Kindly prepare accordingly. If you cannot serve, please inform the executives early.
 ```
 Samples: `Sakitey Ernest` · `Master of Ceremonies (MC)` · `Monthly General Meeting` · `in 3 days` · `Friday, 7 August 2026` · `18:00`
+
+
+> **Why these two are wordier:** Meta rejects a template whose body is mostly
+> placeholders ("too many variables for its length"), so `meeting_reminder` and
+> `ypg_announcement` carry extra fixed text to pass review.
 
 ### Dues
 
@@ -162,9 +169,14 @@ Samples: `Ebenezer Darteh` · `7 September 2026`
 
 **`ypg_announcement`** — broadcasts, devotionals, attendance confirmations
 ```
-{{1}}
+Dear member, there is a new announcement from the Young People's Guild.
+
+Subject: {{1}}
 
 {{2}}
+
+Thank you, and God bless you.
+YPG Secretariat
 ```
 Samples: `Harvest Thanksgiving` · `This Sunday we gather for our annual harvest service. Please be seated by 8:30am.`
 
